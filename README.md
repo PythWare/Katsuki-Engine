@@ -33,3 +33,6 @@ The Installer Wizard will popup when applying AOT2MI mods, mod installer release
 <img width="1896" height="979" alt="k7" src="https://github.com/user-attachments/assets/50269397-bd78-4961-83e5-ff860c43f736" />
 <img width="1898" height="981" alt="k6" src="https://github.com/user-attachments/assets/6ce6fed2-80e6-4188-ad5d-4f37a0f10a00" />
 
+# Extra Info
+
+Katsuki Engine is namjed after Katsuki Bakugo from My Hero Academia. Also, other GUI tools will be made to make modding easier such as G1T Krieger. This is the start of the modding ecosystem for attack on titan games.
