@@ -22,15 +22,20 @@ KE Mod Manager supports safely applying/disabling mods (aot2m/aot2mi files) as w
 
 Another feature of KE Mod Manager is mod collision detection, if a collision is detected KE will try to resolve the collision.
 
-<img width="1139" height="972" alt="k9" src="https://github.com/user-attachments/assets/d81e242a-c2c4-4982-aba5-662070321888" />
+<img width="1150" height="985" alt="k29" src="https://github.com/user-attachments/assets/60519dbb-a4f0-4655-b6b0-03d1a1973cd7" />
+<img width="1147" height="983" alt="k30" src="https://github.com/user-attachments/assets/80925a36-d8f5-46ab-ab0d-dd9bc0396619" />
+
 
 # Katsuki Installer Wizard
 
 The Installer Wizard will popup when applying AOT2MI mods, mod installer releases. It essentially allows the user to choose what to install from the mod as explained in Mod Creator section.
 
-<img width="1838" height="993" alt="k5" src="https://github.com/user-attachments/assets/94a1d6db-3f09-4728-8a8c-c2ea8d6e447e" />
-<img width="1896" height="979" alt="k7" src="https://github.com/user-attachments/assets/50269397-bd78-4961-83e5-ff860c43f736" />
-<img width="1898" height="981" alt="k6" src="https://github.com/user-attachments/assets/6ce6fed2-80e6-4188-ad5d-4f37a0f10a00" />
+<img width="900" height="731" alt="k21" src="https://github.com/user-attachments/assets/a787ade8-b581-4ea2-a492-1de0b287f7e9" />
+<img width="904" height="737" alt="k22" src="https://github.com/user-attachments/assets/53252b73-e403-4d10-87f4-0630c6f9fe8b" />
+<img width="898" height="730" alt="k23" src="https://github.com/user-attachments/assets/619995d4-6918-4c71-ad8b-e359f24ee513" />
+<img width="900" height="730" alt="k24" src="https://github.com/user-attachments/assets/3a7144bd-cd84-4e49-b995-c44c9b36a1c3" />
+<img width="898" height="726" alt="k25" src="https://github.com/user-attachments/assets/12bd5cd8-b780-48f1-a0ba-8cdebc93068d" />
+
 
 # Extra Info
 
