@@ -5,8 +5,7 @@ Katsuki Engine is a GUI toolkit for modding Attack On Titan 2 and soon Attack On
 Katsuki Engine is not yet ready to release but it's close to being ready
 
 # Main GUI
-
-<img width="799" height="831" alt="k8" src="https://github.com/user-attachments/assets/3261979e-ae13-4cbe-ae25-2dd526730cac" />
+<img width="797" height="831" alt="k31" src="https://github.com/user-attachments/assets/7e569daf-2a61-41cd-a63b-d75bb185783b" />
 
 # Mod Creator
 
