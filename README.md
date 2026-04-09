@@ -1,3 +1,9 @@
+# Update
+
+I am no longer using github, I am now using Gitlab. If you want the latest versions of Katsuki Engine then you should keep an eye on the gitlab repository instead https://gitlab.com/PythWare/katsuki-engine
+
+The github version of Katsuki Engine is not the current version of Katsuki Engine, rely on gitlab version instead.
+
 # Katsuki Engine
 
 Katsuki Engine is a GUI toolkit for modding Attack On Titan 2, KE is the foundation of the modding ecosytem for Attack On Titan games. KE can unpack all of the BIN containers, comes with a Mod Creator that turns modded files into AOT2M/AOT2MI mod files (custom mod package/mod installer formats I designed to be used with Katsuki Mod Manager), and a Mod Manager for applying/disabling mods as well as truncating containers back to their original sizes and reverting to original unmoddified versions when disabling all mods.
