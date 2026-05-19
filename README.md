@@ -1,3 +1,7 @@
+# Update
+
+Katsuki Engine will be getting a huge update soon. It'll have new GUI, a different theme for the Mod Manager, and new subcontainer logic. My work on Aldnoah Engine has taught me a lot about Omega Force's signatureless subcontainers, so the new KE will have major improvements for subcontainer handling so it matches my Aldnoah Engine.
+
 # Katsuki Engine
 
 Katsuki Engine is a GUI toolkit for modding Attack On Titan 2, KE is the foundation of the modding ecosytem for Attack On Titan games. KE can unpack all of the BIN containers, comes with a Mod Creator that turns modded files into AOT2M/AOT2MI mod files (custom mod package/mod installer formats I designed to be used with Katsuki Mod Manager), and a Mod Manager for applying/disabling mods as well as truncating containers back to their original sizes and reverting to original unmoddified versions when disabling all mods.
