@@ -52,11 +52,11 @@ To navigate the Katsuki Mod Manager use left click dragging or if you want to ge
 
 The Installer Wizard will popup when applying AOT2MI mods, mod installer releases. It essentially allows the user to choose what to install from the mod as explained in Mod Creator section.
 
-<img width="900" height="731" alt="k21" src="https://github.com/user-attachments/assets/a787ade8-b581-4ea2-a492-1de0b287f7e9" />
-<img width="904" height="737" alt="k22" src="https://github.com/user-attachments/assets/53252b73-e403-4d10-87f4-0630c6f9fe8b" />
-<img width="898" height="730" alt="k23" src="https://github.com/user-attachments/assets/619995d4-6918-4c71-ad8b-e359f24ee513" />
-<img width="900" height="730" alt="k24" src="https://github.com/user-attachments/assets/3a7144bd-cd84-4e49-b995-c44c9b36a1c3" />
-<img width="898" height="726" alt="k25" src="https://github.com/user-attachments/assets/12bd5cd8-b780-48f1-a0ba-8cdebc93068d" />
+<img width="906" height="725" alt="nk17" src="https://github.com/user-attachments/assets/9d40b0bc-e234-440e-bf79-efb6adbbab95" />
+
+<img width="899" height="742" alt="nk18" src="https://github.com/user-attachments/assets/9a4479f6-6761-425f-9bba-2eddc74017b6" />
+
+<img width="897" height="744" alt="nk19" src="https://github.com/user-attachments/assets/32958a1c-c8a0-4a32-b0d8-46411faadba5" />
 
 # How the Mod Manager applies/disables mods
 
