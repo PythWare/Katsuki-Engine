@@ -1,14 +1,8 @@
 # Update
 
-Katsuki Engine will be getting a huge update soon. It'll have new GUI, a different theme for the Mod Manager, and new subcontainer logic. My work on Aldnoah Engine has taught me a lot about Omega Force's signatureless subcontainers, so the new KE will have major improvements for subcontainer handling so it matches my Aldnoah Engine.
+Katsuki Engine 1.0 has released. It has a new GUI, a different theme for the Mod Manager, and new subcontainer logic. My work on Aldnoah Engine has taught me a lot about Omega Force's signatureless subcontainers, so the new KE will has major improvements for subcontainer handling so it matches my Aldnoah Engine.
 
-KE 1.0 will also unpack files with proper filenames and reconstruct paths when feasible. Screenshot examples
-
-<img width="1050" height="972" alt="nk6" src="https://github.com/user-attachments/assets/04d4ffd9-10e1-4162-a448-ac9ff87951a2" />
-
-<img width="1098" height="747" alt="nk5" src="https://github.com/user-attachments/assets/59162df9-331f-4dae-8e75-d2360ab60d12" />
-
-<img width="1237" height="795" alt="nk2" src="https://github.com/user-attachments/assets/559e8d87-15ee-4a14-97f6-d74197b3436a" />
+KE 1.0 also unpacks files with proper filenames and reconstruct paths when feasible. Screenshot examples
 
 # Katsuki Engine
 
@@ -16,21 +10,21 @@ Katsuki Engine is a GUI toolkit for modding Attack On Titan 2, KE is the foundat
 
 # What's needed to use
 
-1. Python 3 and Pillow (a Python imaging library). To install pillow open a command prompt and enter `pip install pillow`
+1. Python 3 and Pillow (a Python imaging library). To install pillow open an admin command prompt and enter `python -m pip install pillow`
 
-2. Place the downloaded files (main.pyw and the Katsuki_Logic folder) in the game's directory (i.e., C:\Program Files (x86)\Steam\steamapps\common\AoT2\LINKDATA)
+2. Place the downloaded files (main.pyw, filename.ref, and the Katsuki_Logic folder) in the game's directory (i.e., C:\Program Files (x86)\Steam\steamapps\common\AoT2\LINKDATA)
 
-If you have python 3 and pillow installed you should be able to run Katsuki Engine by double clicking main.pyw.
+If you have python 3 and pillow installed you should be able to run Katsuki Engine by double clicking main.pyw. If it doesn't work open cmd in the directory and type `python main.pyw'
 
 Don't remove taildata, taildata section will explain this
 
 # Main GUI
 
-KE will unpack the BIN containers, unpack subcontainers, decompress, etc but unpacked files will have incremented filenames while extensions will be based on the file's data.
+KE will unpack the BIN containers, unpack subcontainers, decompress, etc. unpacked files will have their original filenames and only default to incremented filenames if the executables lack a filename for said files.
 
 When unpacking don't assume KE is frozen/stuck if the unpack bar doesn't progress, it isn't. It just takes several minutes to fully unpack/decompress because it's a lot of data being read and a lot of files being unpacked. The speed of unpacking may be affected by if you're unpacking in a HDD or SSD.
 
-<img width="802" height="931" alt="r1" src="https://github.com/user-attachments/assets/3c971280-ce65-4ba1-a215-5f2fc92b76b6" />
+<img width="1050" height="972" alt="nk6" src="https://github.com/user-attachments/assets/7762e9c3-a746-45f4-aa87-160a003129bb" />
 
 # Mod Creator
 
@@ -38,15 +32,21 @@ The Mod Creator turns modded files into aot2m/aot2mi files and allows you to ent
 
 Other features are Mod Genre tagging added as toggles (All, Texture, Audio, Model, Overhaul as the genres) for Standard Payload and Installer Architect, Build Mod toggles (debug or release versions) added to both as well. I also implemented a custom zlib compression algorithm for text descriptions for mods since some users may type long descriptions. Debug mods have a 5k character limit for descriptions while release Mods will use compression. If a mod is toggled as a release Katsuki will attempt to compress the description with zlib and use KRLE (Katsuki RLE, a custom mini RLE compression algorithm I implemented) on padded data (any unused space leftover if the description doesn't use the full 5k character limit). If the output is smaller then when the mod file is created it'll write the compressed text or if it's larger it'll write the original text and perform KRLE on padded data. So basically, ZLIB and KRLE is used on release tagged mods or just KRLE if ZLIB doesn't actually make the text smaller. 
 
-<img width="1201" height="826" alt="r2" src="https://github.com/user-attachments/assets/e2adfd77-4ab8-4219-b1a1-bc3904e07d87" />
-<img width="1197" height="935" alt="r3" src="https://github.com/user-attachments/assets/ab0ccc83-8cf0-4d10-8c66-258b12a04034" />
-<img width="1200" height="928" alt="r4" src="https://github.com/user-attachments/assets/07afce67-5c33-43e6-b796-2ceb3f3c9eeb" />
+<img width="1919" height="1020" alt="nk8" src="https://github.com/user-attachments/assets/698b34f0-a421-456e-a8a9-a08a23ed83de" />
 
-# Mod Manager
+<img width="1920" height="1017" alt="nk9" src="https://github.com/user-attachments/assets/0533e15b-47bb-41ee-a89c-435c82517d10" />
+
+<img width="1920" height="1027" alt="nk10" src="https://github.com/user-attachments/assets/66a35eb3-f8bd-4619-a800-107a72dd2f89" />
+
+# Mod Manager, the Blast Chamber
 
 KE Mod Manager supports safely applying/disabling mods (aot2m/aot2mi files) as well as resetting the container files with the disable all mods button (truncates containers to original sizes and reverts to fresh unmodded versions), displaying the metadata of mods created, displays preview images of mods, plays music that is included in a mod file, tracks mods currently applied, disable playing music (incase you prefer silence), filter mods by typing or selecting the mod genre toggles, etc. aot2mi files are as explained earlier, mod installers so when you want to install such mods the Katsuki Installer Wizard will appear with the options, descriptions, images, etc of the mod installer.
 
-<img width="1145" height="982" alt="r5" src="https://github.com/user-attachments/assets/052e2ee5-e29f-4011-a426-c4cdf3374c15" />
+To navigate the Katsuki Mod Manager use left click dragging or if you want to get to an exact mod just type the mod's name in the search bar. you zan zoom in/out with mousewheel.
+
+<img width="1916" height="1032" alt="nk15" src="https://github.com/user-attachments/assets/37aea110-d8a3-489a-85f5-35946e04079b" />
+
+<img width="1907" height="1033" alt="nk16" src="https://github.com/user-attachments/assets/185f77cd-3f1c-49bd-a516-cf6def421123" />
 
 # Katsuki Installer Wizard
 
@@ -60,7 +60,7 @@ The Installer Wizard will popup when applying AOT2MI mods, mod installer release
 
 # How the Mod Manager applies/disables mods
 
-Katsuki Engine doesn't shift file data within containers nor alter the original files stored with containers. Instead KE will append mods to the end of containers, update the TOCs (which tells the game to load files at the new positions), and then ensures everything is correctly applied. For mod disabling it reverts the TOC, truncates BINs to original sizes (mods are sliced off), and ensures the BINs are fresh/unmodded copies. It relies on the Backups folder created by KE which essentially backsup all containers to ensure you have fresh unmodded copies saved, that is where it retrieves the original TOC.
+Katsuki Engine doesn't shift file data within containers nor alter the original files stored with containers. Instead KE will append mods to the end of containers, update the TOCs (which tells the game to load files at the new positions), and then ensures everything is correctly applied. For mod disabling it reverts the TOC, truncates BINs to original sizes (mods are sliced off), and ensures the BINs are fresh/unmodded copies. It relies on the Backups folder created by KE which essentially backsup all containers' tocs to ensure you have fresh unmodded copies saved, that is where it retrieves the original TOC.
 
 # taildata section
 
@@ -70,6 +70,10 @@ KE will unpack files referenced by the TOCs and assign 22 bytes of taildata to e
 
 If you want to replace loose files make sure to copy the last 22 bytes (taaidata) from the file you're wanting to replace and place it at the end of the file you're wanting to use (i.e., file1.g1t being replaced by new.g1t, copy last 22 bytes of file1.g1t and append to new.g1t). If you want to replace files from a subcontainer, merely replace the files in the subcontainer's folder (each unpacked subcontainer has a folder made that's named after the subcontainer) with the files you want and rebuild the subcontainer with Katsuki Engine's subcontainer rebuild button. Only loose files need the 22 bytes manually handled by you if you're replacing loose files, subcontainers just need rebuilt by KE.
 
+# filename.ref
+
+Make sure that file is placed in the same directory as main.pyw, it's the list of filenames for unpacking files. Don't alter filename.ref unless you know what you're doing.
+
 # Extra Info
 
-Katsuki Engine is named after Katsuki Bakugo from My Hero Academia. Also, other GUI tools will be made to make modding easier such as G1T Krieger. This is the start of the modding ecosystem for attack on titan games.
+Katsuki Engine is named after Katsuki Bakugo from My Hero Academia. This is the start of the modding ecosystem for attack on titan games.
