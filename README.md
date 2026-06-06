@@ -1,8 +1,8 @@
-# Update
+# Version 1.0
 
 Katsuki Engine 1.0 has released. It has a new GUI, a different theme for the Mod Manager, and new subcontainer logic. My work on Aldnoah Engine has taught me a lot about Omega Force's signatureless subcontainers, so the new KE will has major improvements for subcontainer handling so it matches my Aldnoah Engine.
 
-KE 1.0 also unpacks files with proper filenames and reconstruct paths when feasible. Screenshot examples
+KE 1.0 also unpacks files with proper filenames and reconstruct paths when feasible.
 
 # Katsuki Engine
 
@@ -17,6 +17,8 @@ Katsuki Engine is a GUI toolkit for modding Attack On Titan 2, KE is the foundat
 If you have python 3 and pillow installed you should be able to run Katsuki Engine by double clicking main.pyw. If it doesn't work open cmd in the directory and type `python main.pyw'
 
 Don't remove taildata, taildata section will explain this
+
+Make sure to read KE_Guide.txt if you intend to mod AOT2.
 
 # Main GUI
 
