@@ -1,12 +1,284 @@
-import os, threading, tkinter as tk
+import hashlib, math, os, random, threading
+import tkinter as tk
+from dataclasses import dataclass
 from io import BytesIO
 from PIL import ImageTk, Image
 from tkinter import ttk, filedialog, messagebox
-from .katsuki_gauntlets import LILAC, setup_lilac_styles, apply_lilac_to_root, BackgroundUnpacker, ModPacker, ModManagerLogic, log, WinMMAudioPlayer, rebuild_subcontainer_from_folder
+from typing import Dict, List, Optional, Tuple
+
+from .katsuki_gauntlets import BLAST_THEME, LILAC, setup_lilac_styles, apply_lilac_to_root, BackgroundUnpacker, ModPacker, ModManagerLogic, log, WinMMAudioPlayer, rebuild_subcontainer_from_folder
+from .katsuki_blast_manager import BlastChamberWindow
 
 """
-This script handles the GUI logic of Katsuki Engine, calling functions as needed from katsuki_gauntlets
+This script handles the GUI logic of Katsuki Engine, calling functions as needed from other scripts
 """
+
+BG = BLAST_THEME["bg"]
+BG_ALT = BLAST_THEME["bg_alt"]
+PANEL = BLAST_THEME["panel"]
+PANEL_ALT = BLAST_THEME["panel_alt"]
+PANEL_SOFT = BLAST_THEME["panel_soft"]
+FIELD = BLAST_THEME["field"]
+FIELD_ALT = BLAST_THEME["field_alt"]
+TEXT = BLAST_THEME["text"]
+TEXT_MUTED = BLAST_THEME["text_muted"]
+TEXT_DARK = BLAST_THEME["text_dark"]
+ACCENT = BLAST_THEME["accent"]
+ACCENT_BRIGHT = BLAST_THEME["accent_bright"]
+ACCENT_DEEP = BLAST_THEME["accent_deep"]
+GREEN = BLAST_THEME["accent_green"]
+GREEN_BRIGHT = BLAST_THEME["accent_green_bright"]
+DANGER = BLAST_THEME["danger"]
+WARNING = BLAST_THEME["warning"]
+METAL = BLAST_THEME["metal"]
+BORDER = BLAST_THEME["border"]
+PREVIEW_BG = BLAST_THEME["preview_bg"]
+
+OLD_THEME_COLORS = {
+    "#c8a2c8",
+    "#d191fb",
+    "#e0b0ff",
+    "#e8d4f8",
+    "#ead7f7",
+    "#b97eea",
+    "#c9a9c9",
+    "#d9b8f2",
+    "#e5c7ff",
+    "#5e2f5e",
+    "#311238",
+    "#240b2c",
+    "#4b2354",
+}
+MOD_GENRES = ["All", "Texture", "Audio", "Model", "Overhaul"]
+BLAST_ZONE_META = {
+    "All": {"center": (0.0, -980.0), "label": "Ground Zero", "accent": ACCENT_BRIGHT, "text": "Universal payloads and cross-system files."},
+    "Texture": {"center": (-1500.0, -120.0), "label": "Spark Layer", "accent": ACCENT, "text": "Visual overrides, UI swaps, and texture blasts."},
+    "Audio": {"center": (-520.0, 1040.0), "label": "Blast Echo", "accent": GREEN_BRIGHT, "text": "Music packs, voice swaps, and sound payloads."},
+    "Model": {"center": (1460.0, -90.0), "label": "Shrapnel Forge", "accent": METAL, "text": "Character, weapon, and model file changes."},
+    "Overhaul": {"center": (780.0, 1090.0), "label": "Howitzer Core", "accent": ACCENT_DEEP, "text": "Large-scale mod suites and installer payloads."},
+}
+
+
+def stable_hash(text: str) -> int:
+    return int(hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()[:8], 16)
+
+
+def mark_role(widget: tk.Misc, role: str):
+    setattr(widget, "_blast_role", role)
+    return widget
+
+
+def widget_role(widget: tk.Misc) -> str:
+    return getattr(widget, "_blast_role", "")
+
+
+def normalize_color(value: str) -> str:
+    return (value or "").strip().lower()
+
+
+def parent_bg(widget: tk.Misc, fallback: str = BG) -> str:
+    try:
+        return widget.master.cget("bg")
+    except Exception:
+        return fallback
+
+
+def style_action_button(button: tk.Button, role: str = "secondary"):
+    palette = {
+        "primary": (ACCENT, TEXT_DARK, ACCENT_BRIGHT, TEXT_DARK),
+        "success": (GREEN, TEXT, GREEN_BRIGHT, TEXT_DARK),
+        "danger": (DANGER, TEXT, ACCENT_DEEP, TEXT),
+        "ghost": (PANEL_ALT, TEXT, PANEL_SOFT, TEXT),
+        "secondary": (PANEL_SOFT, TEXT, ACCENT, TEXT_DARK),
+    }
+    bg, fg, active_bg, active_fg = palette.get(role, palette["secondary"])
+    button.configure(
+        bg=bg,
+        fg=fg,
+        activebackground=active_bg,
+        activeforeground=active_fg,
+        relief="flat",
+        bd=0,
+        highlightthickness=1,
+        highlightbackground=BORDER,
+        highlightcolor=ACCENT,
+        cursor="hand2",
+        padx=14,
+        pady=8,
+    )
+
+
+def apply_blast_theme_tree(widget: tk.Misc):
+    role = widget_role(widget)
+
+    try:
+        if isinstance(widget, (tk.Tk, tk.Toplevel)):
+            widget.configure(bg=BG)
+        elif isinstance(widget, tk.LabelFrame):
+            widget.configure(
+                bg=BG,
+                fg=ACCENT_BRIGHT,
+                bd=0,
+                relief="flat",
+                highlightthickness=1,
+                highlightbackground=BORDER,
+                font=("Segoe UI", 10, "bold"),
+                padx=8,
+                pady=8,
+            )
+        elif isinstance(widget, tk.Frame):
+            relief = str(widget.cget("relief"))
+            if role in {"panel", "hero", "panel_alt"} or relief in {"ridge", "groove"}:
+                bg = PANEL if role != "panel_alt" else PANEL_ALT
+                widget.configure(bg=bg, relief="flat", bd=0, highlightthickness=1, highlightbackground=BORDER)
+            elif role == "footer":
+                widget.configure(bg=BG_ALT)
+            else:
+                widget.configure(bg=parent_bg(widget))
+        elif isinstance(widget, tk.Label):
+            fg = TEXT
+            bg = parent_bg(widget)
+            current_fg = normalize_color(widget.cget("fg"))
+            current_bg = normalize_color(widget.cget("bg"))
+            if role == "section_title":
+                fg = ACCENT_BRIGHT
+            elif role == "muted" or current_fg in {"gray", "grey", "#808080"}:
+                fg = TEXT_MUTED
+            elif role == "terminal":
+                bg = PREVIEW_BG
+                fg = ACCENT_BRIGHT
+            elif role == "chip":
+                bg = PANEL_SOFT
+            elif role == "danger":
+                fg = DANGER
+            elif current_bg in OLD_THEME_COLORS:
+                bg = parent_bg(widget)
+            widget.configure(bg=bg, fg=fg)
+        elif isinstance(widget, tk.Button):
+            style_action_button(widget, role or "secondary")
+        elif isinstance(widget, tk.Entry):
+            widget.configure(
+                bg=FIELD,
+                fg=TEXT_DARK,
+                insertbackground=ACCENT_DEEP,
+                relief="flat",
+                bd=0,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+                highlightcolor=ACCENT,
+                selectbackground=ACCENT_BRIGHT,
+                selectforeground=TEXT_DARK,
+            )
+        elif isinstance(widget, tk.Text):
+            text_role = role or ("terminal" if normalize_color(widget.cget("bg")) == "black" else "field")
+            if text_role == "terminal":
+                widget.configure(
+                    bg=PREVIEW_BG,
+                    fg=ACCENT_BRIGHT,
+                    insertbackground=ACCENT_BRIGHT,
+                    selectbackground=ACCENT,
+                    selectforeground=TEXT_DARK,
+                    relief="flat",
+                    bd=0,
+                    highlightthickness=1,
+                    highlightbackground=BORDER,
+                    highlightcolor=ACCENT,
+                )
+            else:
+                widget.configure(
+                    bg=FIELD,
+                    fg=TEXT_DARK,
+                    insertbackground=ACCENT_DEEP,
+                    selectbackground=ACCENT_BRIGHT,
+                    selectforeground=TEXT_DARK,
+                    relief="flat",
+                    bd=0,
+                    highlightthickness=1,
+                    highlightbackground=BORDER,
+                    highlightcolor=ACCENT,
+                )
+        elif isinstance(widget, tk.Listbox):
+            list_role = role or ("terminal" if normalize_color(widget.cget("bg")) == "black" else "list")
+            bg = PREVIEW_BG if list_role == "terminal" else PANEL_ALT
+            fg = ACCENT_BRIGHT if list_role == "terminal" else TEXT
+            widget.configure(
+                bg=bg,
+                fg=fg,
+                selectbackground=ACCENT,
+                selectforeground=TEXT_DARK,
+                relief="flat",
+                bd=0,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+                highlightcolor=ACCENT,
+            )
+        elif isinstance(widget, tk.Canvas):
+            canvas_bg = PREVIEW_BG if role == "preview" or normalize_color(widget.cget("bg")) == "black" else parent_bg(widget)
+            widget.configure(bg=canvas_bg, highlightthickness=0, bd=0, relief="flat")
+        elif isinstance(widget, tk.Checkbutton):
+            widget.configure(
+                bg=parent_bg(widget),
+                fg=TEXT,
+                activebackground=parent_bg(widget),
+                activeforeground=ACCENT_BRIGHT,
+                selectcolor=PANEL_SOFT,
+                bd=0,
+                highlightthickness=0,
+            )
+        elif isinstance(widget, tk.Radiobutton):
+            widget.configure(
+                bg=parent_bg(widget),
+                fg=TEXT,
+                activebackground=parent_bg(widget),
+                activeforeground=ACCENT_BRIGHT,
+                selectcolor=PANEL_SOFT,
+                bd=0,
+                highlightthickness=0,
+            )
+    except tk.TclError:
+        pass
+
+    for child in widget.winfo_children():
+        apply_blast_theme_tree(child)
+
+
+def draw_preview_placeholder(canvas: tk.Canvas, title: str, subtitle: Optional[str] = None):
+    width = max(1, int(canvas.cget("width")))
+    height = max(1, int(canvas.cget("height")))
+    canvas.delete("all")
+    canvas.create_rectangle(0, 0, width, height, fill=PREVIEW_BG, outline="")
+    canvas.create_text(width / 2, height / 2 - 8, text=title, fill=TEXT, font=("Segoe UI", 12, "bold"))
+    if subtitle:
+        canvas.create_text(width / 2, height / 2 + 16, text=subtitle, fill=TEXT_MUTED, font=("Segoe UI", 9), width=width - 24)
+
+
+def genre_color(genre: str, active: bool = False) -> str:
+    zone = BLAST_ZONE_META.get(genre, BLAST_ZONE_META["All"])
+    if genre == "Audio" and active:
+        return GREEN_BRIGHT
+    if active and genre != "Audio":
+        return ACCENT_BRIGHT
+    return zone["accent"]
+
+
+@dataclass
+class BlastModRecord:
+    path: str
+    filename: str
+    title: str
+    author: str
+    version: str
+    description: str
+    genre: str
+    mode: str
+    package_type: str
+    active: bool
+    image_count: int
+    has_audio: bool
+    header: dict
+    parse_error: str = ""
+    x: float = 0.0
+    y: float = 0.0
 
 class ModManagerWindow(tk.Toplevel):
     def __init__(self, master):
@@ -19,7 +291,7 @@ class ModManagerWindow(tk.Toplevel):
         self.logic = ModManagerLogic()
         self._audio_player = WinMMAudioPlayer(log=log)
         self.current_mod_data = None
-        self.music_enabled = tk.BooleanVar(value=True) # The Toggle
+        self.music_enabled = tk.BooleanVar(value=True)
         self.image_index = 0
         self.tk_img = None
         self.card_widgets = {}
@@ -383,7 +655,15 @@ class ModManagerWindow(tk.Toplevel):
             raw_data = images[self.image_index]
             
             img = Image.open(BytesIO(raw_data))
-            img.thumbnail((500, 500)) 
+            resampling = getattr(getattr(Image, "Resampling", Image), "LANCZOS")
+            self.img_container.update_idletasks()
+            width = self.img_container.winfo_width()
+            height = self.img_container.winfo_height()
+            if width <= 1:
+                width = int(self.img_container.cget("width") or 500)
+            if height <= 1:
+                height = int(self.img_container.cget("height") or 500)
+            img = img.resize((max(1, width), max(1, height)), resample=resampling)
             self.tk_img = ImageTk.PhotoImage(img)
             self.img_label.config(image=self.tk_img, text="", bg=LILAC) 
         except Exception as e:
@@ -468,6 +748,9 @@ class InstallerWizard(tk.Toplevel):
         
         self.setup_ui()
         self.parse_and_build()
+        mark_role(self.lbl_title, "section_title")
+        mark_role(self.prev_canvas, "preview")
+        apply_blast_theme_tree(self)
 
     def setup_ui(self):
         """Handles GUI setup for Katsuki Installer"""
@@ -615,7 +898,7 @@ class InstallerWizard(tk.Toplevel):
                 pass
         else:
             self.prev_canvas.delete("all")
-            self.prev_canvas.create_text(150, 150, text="No Preview Available", fill="gray")
+            self.prev_canvas.create_text(150, 150, text="No Preview Available", fill=TEXT_MUTED)
 
     def run_install(self):
         try:
@@ -740,11 +1023,21 @@ class ModCreatorWindow(tk.Toplevel):
         
         self.setup_standard_ui(self.tab_standard)
         self.setup_architect_ui(self.tab_installer)
+        mark_role(self.file_list, "terminal")
+        mark_role(self.preview_canvas, "preview")
+        mark_role(self.img_list, "terminal")
+        mark_role(self.lbl_audio, "terminal")
+        mark_role(self.lbl_arch_audio, "terminal")
+        mark_role(self.lst_opt_files, "terminal")
+        mark_role(self.lbl_opt_img, "preview")
+        apply_blast_theme_tree(self)
+        style_action_button(self.btn_create, "primary")
+        style_action_button(self.btn_arch_build, "primary")
 
     def create_header(self, parent, text):
-        lbl = tk.Label(parent, text=text, font=("Impact", 18), bg=LILAC, fg="#5e2f5e", anchor="w")
+        lbl = tk.Label(parent, text=text, font=("Impact", 18), bg=LILAC, fg=ACCENT_BRIGHT, anchor="w")
         lbl.pack(fill="x", pady=(0, 10))
-        tk.Frame(parent, bg="#5e2f5e", height=2).pack(fill="x", pady=(0, 10))
+        tk.Frame(parent, bg=ACCENT, height=2).pack(fill="x", pady=(0, 10))
 
     def setup_standard_ui(self, parent):
         parent.columnconfigure(0, weight=1)
@@ -809,7 +1102,7 @@ class ModCreatorWindow(tk.Toplevel):
 
         self.preview_canvas = tk.Canvas(vis_container, bg="black", width=300, height=150, highlightthickness=0)
         self.preview_canvas.pack(pady=(0, 5), anchor="center")
-        self.preview_canvas.create_text(150, 75, text="No Preview", fill="gray", font=("Segoe UI", 10))
+        self.preview_canvas.create_text(150, 75, text="No Preview", fill=TEXT_MUTED, font=("Segoe UI", 10))
 
         self.img_list = tk.Listbox(vis_container, bg="black", fg="cyan", font=("Consolas", 10), bd=0, highlightthickness=0, height=5)
         self.img_list.pack(fill="x", pady=(0, 5))
@@ -820,7 +1113,7 @@ class ModCreatorWindow(tk.Toplevel):
         ttk.Button(btn_frame_i, text="[-] Drop Img", command=self.remove_image).pack(side="left", expand=True, fill="x", padx=2)
 
         tk.Label(vis_container, text="Theme Audio (WAV only):", font=("Segoe UI", 9, "bold"), bg="#D191FB", anchor="w").pack(fill="x")
-        self.lbl_audio = tk.Label(vis_container, text="No Audio Selected", bg="black", fg="yellow", font=("Consolas", 10), relief="sunken")
+        self.lbl_audio = tk.Label(vis_container, text="No Audio Selected", bg="black", fg=ACCENT_BRIGHT, font=("Consolas", 10), relief="sunken")
         self.lbl_audio.pack(fill="x", pady=5, ipady=4)
 
         btn_frame_a = tk.Frame(vis_container, bg="#D191FB")
@@ -900,7 +1193,7 @@ class ModCreatorWindow(tk.Toplevel):
         audio_frame = tk.LabelFrame(left_frame, text="Installer Music", bg=LILAC, padx=5, pady=5)
         audio_frame.pack(fill="x", pady=(10, 0))
         
-        self.lbl_arch_audio = tk.Label(audio_frame, text="No Audio Selected", bg="black", fg="yellow", font=("Consolas", 9), relief="sunken")
+        self.lbl_arch_audio = tk.Label(audio_frame, text="No Audio Selected", bg="black", fg=ACCENT_BRIGHT, font=("Consolas", 9), relief="sunken")
         self.lbl_arch_audio.pack(fill="x", pady=(0, 5))
         
         af_btn = tk.Frame(audio_frame, bg=LILAC)
@@ -952,7 +1245,7 @@ class ModCreatorWindow(tk.Toplevel):
         tk.Label(self.frm_opt, text="Preview Image:", font=("Segoe UI", 9, "bold"), bg="#D191FB", anchor="w").pack(fill="x")
         self.lbl_opt_img = tk.Canvas(self.frm_opt, bg="black", width=300, height=150, highlightthickness=0)
         self.lbl_opt_img.pack(pady=(0, 5), anchor="w")
-        self.lbl_opt_img.create_text(150, 75, text="No Image", fill="gray", font=("Segoe UI", 10))
+        self.lbl_opt_img.create_text(150, 75, text="No Image", fill=TEXT_MUTED, font=("Segoe UI", 10))
 
         ttk.Button(self.frm_opt, text="Set Image", command=self.arch_set_image).pack(anchor="w")
 
@@ -996,7 +1289,7 @@ class ModCreatorWindow(tk.Toplevel):
                 self.update_preview(self.images_to_pack[-1])
             else: 
                 self.preview_canvas.delete("all")
-                self.preview_canvas.create_text(150, 75, text="No Preview", fill="gray", font=("Segoe UI", 10))
+                self.preview_canvas.create_text(150, 75, text="No Preview", fill=TEXT_MUTED, font=("Segoe UI", 10))
 
     def update_preview(self, img_path):
         try:
@@ -1013,11 +1306,11 @@ class ModCreatorWindow(tk.Toplevel):
             if os.path.getsize(wav) > 10 * 1024 * 1024:
                 if not messagebox.askyesno("Large File", "File > 10MB. Continue?"): return
             self.audio_to_pack = wav
-            self.lbl_audio.config(text=os.path.basename(wav), fg="#00FF00")
+            self.lbl_audio.config(text=os.path.basename(wav), fg=GREEN_BRIGHT)
 
     def clear_audio(self):
         self.audio_to_pack = None
-        self.lbl_audio.config(text="No Audio Selected", fg="yellow")
+        self.lbl_audio.config(text="No Audio Selected", fg=ACCENT_BRIGHT)
 
     def create_mod_package(self):
         name = self.ent_name.get().strip()
@@ -1121,7 +1414,7 @@ class ModCreatorWindow(tk.Toplevel):
                 self.update_arch_preview(img)
             else: 
                 self.lbl_opt_img.delete("all")
-                self.lbl_opt_img.create_text(150, 75, text="No Image", fill="gray", font=("Segoe UI", 10))
+                self.lbl_opt_img.create_text(150, 75, text="No Image", fill=TEXT_MUTED, font=("Segoe UI", 10))
 
     def arch_update_name(self, event=None):
         if not self.current_arch_item: return
@@ -1161,11 +1454,11 @@ class ModCreatorWindow(tk.Toplevel):
             if os.path.getsize(wav) > 10 * 1024 * 1024:
                 if not messagebox.askyesno("Large File", "File > 10MB. Continue?"): return
             self.arch_audio_file = wav
-            self.lbl_arch_audio.config(text=os.path.basename(wav), fg="#00FF00")
+            self.lbl_arch_audio.config(text=os.path.basename(wav), fg=GREEN_BRIGHT)
 
     def arch_clear_audio(self):
         self.arch_audio_file = None
-        self.lbl_arch_audio.config(text="No Audio Selected", fg="yellow")
+        self.lbl_arch_audio.config(text="No Audio Selected", fg=ACCENT_BRIGHT)
 
     def update_arch_preview(self, path):
         try:
@@ -1224,9 +1517,10 @@ class CoreTools():
         
         self.gui_setup()
         self.init_progress()
+        apply_blast_theme_tree(self.root)
 
     def ui_notify(self, kind, title, message):
-        """Thread-safe, can be called from worker threads"""
+        """Thread safe, can be called from worker threads"""
         def _do():
             if kind == "warning":
                 messagebox.showwarning(title, message)
@@ -1256,7 +1550,7 @@ class CoreTools():
             header_frame, 
             text="AOT2 Modding Toolkit", 
             font=("Segoe UI", 10, "bold"), 
-            foreground="#5e2f5e", 
+            foreground=TEXT_MUTED, 
             style="Lilac.TLabel"
         ).pack()
 
@@ -1267,7 +1561,8 @@ class CoreTools():
             card_container, 
             title="Mod Creator", 
             subtitle="Pack files into .aot2m/.aot2mi mods", 
-            command=self.open_mod_creator_window
+            command=self.open_mod_creator_window,
+            color=GREEN
         )
         self.btn_creator.pack(pady=12)
 
@@ -1275,7 +1570,8 @@ class CoreTools():
             card_container, 
             title="Mod Manager", 
             subtitle="Apply, toggle, or disable active mods", 
-            command=self.open_mod_manager_window
+            command=self.open_mod_manager_window,
+            color=ACCENT_BRIGHT
         )
         self.btn_manager.pack(pady=12)
 
@@ -1283,7 +1579,8 @@ class CoreTools():
             card_container, 
             title="Unpack Bins", 
             subtitle="Extract BIN files", 
-            command=self.start_unpacking
+            command=self.start_unpacking,
+            color=METAL
         )
         self.btn_unpack.pack(pady=12)
 
@@ -1291,7 +1588,8 @@ class CoreTools():
             card_container,
             title="Rebuild Subcontainer",
             subtitle="Pack an extracted subfolder back into one file",
-            command=self.start_subcontainer_rebuild
+            command=self.start_subcontainer_rebuild,
+            color=ACCENT_DEEP
         )
         self.btn_rebuild_sub.pack(pady=12)
 
@@ -1308,7 +1606,7 @@ class CoreTools():
         Singleton Pattern, only opens if not already open
         """
         if self.mod_manager_window is None or not self.mod_manager_window.winfo_exists():
-            self.mod_manager_window = ModManagerWindow(self.root)
+            self.mod_manager_window = BlastChamberWindow(self.root)
         else:
             self.mod_manager_window.lift() # Bring to front
             self.mod_manager_window.focus_force()
@@ -1468,21 +1766,21 @@ class CoreTools():
             self.root.after(0, lambda: setattr(self, "active_task", None))
 
 class HoverCard(tk.Canvas):
-    def __init__(self, master, title, subtitle, command, color="#E0B0FF", width=320, height=108, **kwargs):
+    def __init__(self, master, title, subtitle, command, color=ACCENT, width=320, height=108, **kwargs):
         super().__init__(
             master,
             width=width,
             height=height,
-            bg=LILAC,
+            bg=BG,
             highlightthickness=0,
             bd=0,
             **kwargs
         )
         self.command = command
         self.color = color
-        self.default_bg = "#C9A9C9"
-        self.hover_bg = "#D9B8F2"
-        self.selected_bg = "#E5C7FF"
+        self.default_bg = PANEL_ALT
+        self.hover_bg = "#3A2A21"
+        self.selected_bg = "#4A301F"
         self.is_selected = False
 
         self.rect = self.create_rectangle(
@@ -1493,9 +1791,16 @@ class HoverCard(tk.Canvas):
         )
 
         self.accent = self.create_rectangle(
-            10, 10, 16, height - 10,
+            10, 10, 20, height - 10,
             fill=color,
             outline=color
+        )
+
+        self.spark = self.create_line(
+            width - 48, 12,
+            width - 14, height - 12,
+            fill=ACCENT_DEEP if color == ACCENT else color,
+            width=3
         )
 
         self.title_text = self.create_text(
@@ -1503,7 +1808,7 @@ class HoverCard(tk.Canvas):
             text=title,
             font=("Segoe UI", 14, "bold"),
             anchor="w",
-            fill="#1f1024"
+            fill=TEXT
         )
 
         self.sub_text = self.create_text(
@@ -1511,11 +1816,11 @@ class HoverCard(tk.Canvas):
             text=subtitle,
             font=("Segoe UI", 9),
             anchor="w",
-            fill="#5e2f5e",
-            width=width - 50
+            fill=TEXT_MUTED,
+            width=width - 66
         )
 
-        for tag in (self.rect, self.accent, self.title_text, self.sub_text):
+        for tag in (self.rect, self.accent, self.spark, self.title_text, self.sub_text):
             self.tag_bind(tag, "<Enter>", self.on_enter)
             self.tag_bind(tag, "<Leave>", self.on_leave)
             self.tag_bind(tag, "<Button-1>", self.on_click)

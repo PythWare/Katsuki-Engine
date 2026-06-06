@@ -1,0 +1,24 @@
+This is a short guide for anyone using Katsuki Engine
+
+Make sure to read the readme, to use KE you need Python 3 installed and Pillow (done with python -m pip install pillow in admin command console)
+
+Most files unpack with their original filename and are placed in their reconstructed paths but the executables (where filenames are stored) don't have filenames for files stored within subcontainers.
+
+It works like this, top level (the files BINs' TOCs reference) files 95%+ of the time have a filename in the executables. So loose files and subcontainers almost always have their original filename however, the files within 
+subcontainers don't have filenames in the executables or anywhere else. So unpacked subcontainers get their files unpacked into a folder named after the 
+subcontainer (i.e., 0000_Eren_mdl.bin unpacks the subcontainer files to 0000_Eren_mdl).
+
+To repack subcontainers with KE, use the Rebuild Subcontainer button. To use it is easy. Select the subcontainer folder (it'll always be named after the original subcontainer), then select the subcontainer that is named
+after that folder (i.e., 0000_Soldier_M_mot being the folder and 0000_Soldier_M_mot.bin being the subcontainer). After that, a rebuild subcontainer file will be made.
+
+If you intend to make a mod for AOT2 but the files you mod are within subcontainers, you MUST rebuild the subcontainer with Rebuild Subcontainer button. The game is programmed to seek the subcontainers and the files within them.
+Which means if you try creating a mod manager supported mod without rebuilding the subcontainer the game won't know that say, entry_00001.g1m belonged to Mikasa's g1m folder. It's easy, just rebuild subcontainers with the button
+before turning your modded files into mod manager supported mods with Mod Creator.
+
+There are some files that unpack with incrementing filenames, there's not much I can do about that because i've checked the executables and BIN containers, some files just seem to lack filenames but 95% of the files
+do have proper filenames and are placed in the original paths they would be in.
+
+IMPORTANT, if you see empty files created in a directory (like in AoT2\LINKDATA\LINK_B\File\Stage\ST00_00\high_mdl) don't delete those empty files, it's used for indexing when rebuilding subcontainers.
+Empty files may be generated during subcontainer unpacking sometimes and the reason is Omega Force either had dummy entries or unimplemented features they didn't get around to I guess.
+
+If you encounter any issues, before you create an issue or contact me on discord/reddit, make sure you read the readme and this text file.

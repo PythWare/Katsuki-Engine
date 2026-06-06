@@ -1,130 +1,171 @@
-import os, sys, shutil, struct, io, zlib, logging, ctypes, threading, json
+import os, sys, struct, io, zlib, logging, ctypes, threading, json
 import tkinter as tk
 from ctypes import wintypes
 from tkinter import ttk
 from PIL import Image, ImageOps
+from .katsuki_sub_logic import (
+    decompress_zl_bytes,
+    is_zlib_header,
+    rebuild_subcontainer_from_folder,
+    unpack_nested_resource,
+)
+from .katsuki_ref_runtime import load_filename_ref, resolve_output_path
 
 """
 This script handles the utility logic such as unpacking, mod creation, etc
 """
 
-LILAC = "#C8A2C8"
+LILAC = "#12100F"
 MOD_SIGNATURE = b'AOT2MF'
 INSTALLER_SIGNATURE = b'AOT2MI'
 BACKUP_FOLDER = "Backups"
-LILAC_RGB = (200, 162, 200)
+LILAC_RGB = (18, 16, 15)
+BLAST_THEME = {
+    "bg": "#12100F",
+    "bg_alt": "#191411",
+    "panel": "#231914",
+    "panel_alt": "#2F221B",
+    "panel_soft": "#3A2A20",
+    "field": "#F3E2C4",
+    "field_alt": "#D4C0A2",
+    "text": "#F8F1E6",
+    "text_muted": "#C7B69C",
+    "text_dark": "#1B140F",
+    "accent": "#FF6A13",
+    "accent_bright": "#FFA12E",
+    "accent_deep": "#D94715",
+    "accent_green": "#5F7934",
+    "accent_green_bright": "#89A247",
+    "danger": "#B42A16",
+    "warning": "#F08A22",
+    "metal": "#9A9BA2",
+    "border": "#6F4A25",
+    "preview_bg": "#0A0908",
+}
 
 EXT4 = {
-    b'GT1G': '.g1t',
-    b'_M1G': '.g1m',
-    b'_S2G': '.g1s',
-    b'ME1G': '.g1em',
-    b'_A1G': '.g1a',
-    b'_A2G': '.g1a',
-    b'XF1G': '.g1fx',
-    b'OC1G': '.g1c',
-    b'_L1G': '.g1l',
-    b'_N1G': '.g1n',
-    b'_H1G': '.g1h',
-    b'SV1G': '.g1vs',
-    b'LCSK': '.kscl',
-    b'TLSK': '.kslt',
-    b'KTSR': '.ktsl2stbin',
-    b'KTSC': '.ktsl2asbin',
-    b'KTSS': '.ktss',
-    b'KOVS': '.kvs',
-    b'_SPK': '.postfx',
-    b'_OLS': '.sebin',
-    b'OggS': '.ogg',
-    b'RIFF': '.riff',
-    b'1DHW': '.sed',
-    b'_HBW': '.wbh',
-    b'_DBW': '.wbd',
-    b'KPMG': '.gmpk',
-    b'KPML': '.lmpk',
-    b'KPAG': '.gapk',
-    b'KPEG': '.gepk',
-    b'0KPB': '.bpk',
-    b'KPTR': '.rtrpk',
-    b'KLMD': '.mdlk',
-    b'RLDM': '.mdlpack',
-    b'TLDM': '.mdltexpack',
-    b'GRAX': '.exarg',
-    b'RFFE': '.effectpack',
-    b'DAEH': '.exhead',
-    b'RRRT': '.ktfkpack',
-    b'RLOC': '.colpack',
-    b'APDT': '.tdpack',
-    b'_DRK': '.rdb',
-    b'IDRK': '.rdb.bin',
-    b'PDRK': '.fdata',
-    b'_RNK': '.name',
-    b'IRNK': '.name.bin',
-    b'_DOK': '.kidsobjdb',
-    b'IDOK': '.kidsobjdb.bin',
-    b'RDOK': '.kidsobjdb.bin',
-    b'MDLS': '.mdls',
-    b'DXBC': '.dxbc',
-    b'FP1G': '.fp1g',
-    b'HWYX': '.hwyx',
-    b'SCM_': '.scm',
-    b'DLV0': '.dlv0',
-    b'DLV4': '.dlv4',
-    b'SV00': '.sv00',
-    b'SV01': '.sv01',
-    b'SV02': '.sv02',
-    b'SV03': '.sv03',
-    b'SV20': '.sv20',
-    b'SV30': '.sv30',
-    b'SV40': '.sv40',
-    b'SV41': '.sv41',
-    b'Act_': '.act',
-    b'ET00': '.et00',
-    b'ET01': '.et01',
-    b'ET02': '.et02',
-    b'ET03': '.et03',
-    b'FT02': '.ft02',
-    b'SARC': '.sarc',
-    b'CRAE': '.elixir',
-    b'SPKG': '.spkg',
-    b'SCEN': '.scene',
-    b'KPS3': '.shaderpack',
-    b'QGWS': '.swg',
-    b'EVIR': '.river',
-    b'BGIR': '.rig',
-    b'RTRE': '.ertr',
-    b'DATD': '.datd',
-    b'D0CL': '.lcd0',
-    b'HDDB': '.hdb',
-    b'RTXE': '.extra',
-    b'LLOC': '.coll',
-    b'ONUN': '.nuno',
-    b'VNUN': '.nunv',
-    b'SNUN': '.nuns',
-    b'TFOS': '.soft',
-    b'RIAH': '.hair',
-    b'TNOC': '.cont',
-    b'pkgi': '.pkginfo',
-    b'DDS ': '.dds',
-    b'char': '.chardata',
-    b'clip': '.clip',
-    b'body': '.bodybase',
-    b'MSBP': '.material',
-    b'tdpa': '.tdpack',
-    b'HIUB': '.hiub',
-    b'MDLK': '.KLDM',
-    b'ipu2': '.ipu2',
-    b'MESC': '.MESC'
+    b"_MHK": ".khm",
+    b"KFTK": ".ktf",
+    b"GT1G": ".g1t",
+    b"_M1G": ".g1m",
+    b"_S1G": ".g1s",
+    b"_S2G": ".g2s",
+    b"ME1G": ".g1em",
+    b"_E1G": ".g1e",
+    b"_A1G": ".g1a",
+    b"_A2G": ".g2a",
+    b"XF1G": ".g1fx",
+    b"OC1G": ".g1c",
+    b"_L1G": ".g1l",
+    b"_N1G": ".g1n",
+    b"_H1G": ".g1h",
+    b"SV1G": ".g1vs",
+    b"LCSK": ".kscl",
+    b"TLSK": ".kslt",
+    b"KTSR": ".ktsl2stbin",
+    b"KTSC": ".ktsl2asbin",
+    b"KTSS": ".ktss",
+    b"KOVS": ".kvs",
+    b"_SPK": ".postfx",
+    b"_OLS": ".sebin",
+    b"OggS": ".ogg",
+    b"RIFF": ".riff",
+    b"1DHW": ".sed",
+    b"_HBW": ".wbh",
+    b"_DBW": ".wbd",
+    b"KPMG": ".gmpk",
+    b"KPML": ".lmpk",
+    b"KPAG": ".gapk",
+    b"KPEG": ".gepk",
+    b"0KPB": ".bpk",
+    b"KPTR": ".rtrpk",
+    b"KLMD": ".mdlk",
+    b"RLDM": ".mdlpack",
+    b"TLDM": ".mdltexpack",
+    b"GRAX": ".exarg",
+    b"RFFE": ".effectpack",
+    b"DAEH": ".exhead",
+    b"RRRT": ".ktfkpack",
+    b"RLOC": ".colpack",
+    b"APDT": ".tdpack",
+    b"_DRK": ".rdb",
+    b"IDRK": ".rdb.bin",
+    b"PDRK": ".fdata",
+    b"_RNK": ".name",
+    b"IRNK": ".name.bin",
+    b"_DOK": ".kidsobjdb",
+    b"IDOK": ".kidsobjdb.bin",
+    b"RDOK": ".kidsobjdb.bin",
+    b"MDLS": ".mdls",
+    b"DXBC": ".dxbc",
+    b"FP1G": ".fp1g",
+    b"HWYX": ".hwyx",
+    b"SCM_": ".scm",
+    b"DLV0": ".dlv0",
+    b"DLV4": ".dlv4",
+    b"SV00": ".sv00",
+    b"SV01": ".sv01",
+    b"SV02": ".sv02",
+    b"SV03": ".sv03",
+    b"SV20": ".sv20",
+    b"SV30": ".sv30",
+    b"SV40": ".sv40",
+    b"SV41": ".sv41",
+    b"Act_": ".act",
+    b"ET00": ".et00",
+    b"ET01": ".et01",
+    b"ET02": ".et02",
+    b"ET03": ".et03",
+    b"FT02": ".ft02",
+    b"SARC": ".sarc",
+    b"CRAE": ".elixir",
+    b"SPKG": ".spkg",
+    b"SCEN": ".scene",
+    b"KPS3": ".shaderpack",
+    b"QGWS": ".swg",
+    b"EVIR": ".river",
+    b"BGIR": ".rig",
+    b"RTRE": ".ertr",
+    b"DATD": ".datd",
+    b"D0CL": ".lcd0",
+    b"HDDB": ".hdb",
+    b"RTXE": ".extra",
+    b"LLOC": ".coll",
+    b"ONUN": ".nuno",
+    b"VNUN": ".nunv",
+    b"SNUN": ".nuns",
+    b"TFOS": ".soft",
+    b"RIAH": ".hair",
+    b"TNOC": ".cont",
+    b"pkgi": ".pkginfo",
+    b"DDS ": ".dds",
+    b"char": ".chardata",
+    b"clip": ".clip",
+    b"body": ".bodybase",
+    b"MSBP": ".material",
+    b"tdpa": ".tdpack",
+    b"HIUB": ".hiub",
+    b"MDLK": ".MDLK",
+    b"ipu2": ".ipu2",
+    b"MESC": ".MESC",
+    b"OFNI": ".INFO",
+    b"_COK": ".KOC",
+    b"SWGQ": ".SWGQ",
+    b"DJBO": ".OBJD",
+    b"WHD1": ".whd",
+    b"DMIG": ".G1MD",
+    b"LHSK": ".KSHL"
+    
 }
 
 EXT3 = {
-    b'XFT': '.xft',
-    b'GT1': '.g1t'
+    b"XFT": ".xft",
+    b"GT1": ".g1t",
 }
 
 EXT2 = {
-    b'BM': '.bmp',
-    b'XL': '.XL'
+    b"BM": ".bmp",
+    b"XL": ".XL",
 }
 
 # used for truncating, disabling all mods to be precise
@@ -164,6 +205,42 @@ BIN14_METADATA_SIZE = 39_008 # REGION_EU
 BIN15_METADATA_SIZE = 16 # EX_MASTER
 BIN16_METADATA_SIZE = 44_016 # PATCH_000
 BIN17_METADATA_SIZE = 3_632 # PATCH_EDEN_000
+
+CONTAINER_PATHS = {
+    0: "LINKDATA_A.BIN",
+    1: "LINKDATA_B.BIN",
+    2: "LINKDATA_C.BIN",
+    3: "LINKDATA_D.BIN",
+    4: "LINKDATA_DEBUG.BIN",
+    5: "LINKDATA_DLC.BIN",
+    6: "LINKDATA_PLATFORM_DX11.BIN",
+    7: "LINKDATA_PLATFORM_EDEN_DX11.BIN",
+    8: "REGION/LINKDATA_REGION_JP.BIN",
+    9: "REGION/LINKDATA_REGION_AS.BIN",
+    10: "REGION/LINKDATA_REGION_EDEN_AS.BIN",
+    11: "REGION/LINKDATA_REGION_EDEN_EU.BIN",
+    12: "REGION/LINKDATA_REGION_EDEN_JP.BIN",
+    13: "REGION/LINKDATA_REGION_EU.BIN",
+    14: "EX/LINKDATA_EX_MASTER.BIN",
+    15: "PATCH/LINKDATA_PATCH_000.BIN",
+    16: "PATCH/LINKDATA_PATCH_EDEN_000.BIN",
+}
+
+METADATA_SIZE_MAP = {
+    0: BIN1_METADATA_SIZE, 1: BIN2_METADATA_SIZE, 2: BIN3_METADATA_SIZE, 3: BIN4_METADATA_SIZE,
+    4: BIN5_METADATA_SIZE, 5: BIN6_METADATA_SIZE, 6: BIN7_METADATA_SIZE, 7: BIN8_METADATA_SIZE,
+    8: BIN9_METADATA_SIZE, 9: BIN10_METADATA_SIZE, 10: BIN11_METADATA_SIZE, 11: BIN12_METADATA_SIZE,
+    12: BIN13_METADATA_SIZE, 13: BIN14_METADATA_SIZE, 14: BIN15_METADATA_SIZE, 15: BIN16_METADATA_SIZE,
+    16: BIN17_METADATA_SIZE,
+}
+
+FILE_SIZE_MAP = {
+    0: BIN1_SIZE, 1: BIN2_SIZE, 2: BIN3_SIZE, 3: BIN4_SIZE,
+    4: BIN5_SIZE, 5: BIN6_SIZE, 6: BIN7_SIZE, 7: BIN8_SIZE,
+    8: BIN9_SIZE, 9: BIN10_SIZE, 10: BIN11_SIZE, 11: BIN12_SIZE,
+    12: BIN13_SIZE, 13: BIN14_SIZE, 14: BIN15_SIZE, 15: BIN16_SIZE,
+    16: BIN17_SIZE,
+}
 
 GENRE_MAP = {"All": 1, "Texture": 2, "Audio": 3, "Model": 4, "Overhaul": 5}
 REV_GENRE_MAP = {1: "All", 2: "Texture", 3: "Audio", 4: "Model", 5: "Overhaul"}
@@ -215,22 +292,60 @@ LOG_PATH = setup_logging()
 log = logging.getLogger("katsuki")
 log.info("Logging initialized: %s", LOG_PATH)
 
+def read_metadata_block(path, size):
+    with open(path, "rb") as f:
+        data = f.read(size)
+    if len(data) != size:
+        raise IOError(f"{path} is only {len(data)} bytes; expected {size} bytes")
+    return data
+
+def write_toc_backup(source_path, backup_path, metadata_size):
+    """
+    Store only the container TOC/metadata prefix needed to undo appended mods
+    Existing full container backups are shrunk using their own metadata bytes
+    """
+    existing_size = os.path.getsize(backup_path) if os.path.exists(backup_path) else None
+    if existing_size == metadata_size:
+        return "kept"
+    if existing_size is not None and existing_size < metadata_size:
+        raise IOError(
+            f"Existing backup is only {existing_size} bytes; expected {metadata_size} bytes"
+        )
+
+    read_path = backup_path if existing_size is not None else source_path
+    toc_data = read_metadata_block(read_path, metadata_size)
+
+    dest_dir = os.path.dirname(backup_path)
+    if dest_dir and not os.path.exists(dest_dir):
+        os.makedirs(dest_dir)
+
+    tmp_path = f"{backup_path}.tmp"
+    try:
+        with open(tmp_path, "wb") as out:
+            out.write(toc_data)
+        try:
+            os.utime(tmp_path, (os.path.getatime(read_path), os.path.getmtime(read_path)))
+        except OSError:
+            pass
+        os.replace(tmp_path, backup_path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+    return "shrunk" if read_path == backup_path else "created"
+
 def ensure_backups():
     """
-    Creates a Backups folder and copies original game containers,
+    Creates metadata only TOC backups for original game containers
     preserving subdirectory structures
     """
     backup_errors = []
-    
-    containers = [
-        "LINKDATA_A.BIN", "LINKDATA_B.BIN", "LINKDATA_C.BIN", "LINKDATA_D.BIN",
-        "LINKDATA_DEBUG.BIN", "LINKDATA_DLC.BIN", "LINKDATA_PLATFORM_DX11.BIN", 
-        "LINKDATA_PLATFORM_EDEN_DX11.BIN", "REGION/LINKDATA_REGION_JP.BIN",
-        "REGION/LINKDATA_REGION_AS.BIN", "REGION/LINKDATA_REGION_EDEN_AS.BIN", "REGION/LINKDATA_REGION_EDEN_EU.BIN", "REGION/LINKDATA_REGION_EDEN_JP.BIN",
-        "REGION/LINKDATA_REGION_EU.BIN", "EX/LINKDATA_EX_MASTER.BIN", "PATCH/LINKDATA_PATCH_000.BIN", 
-        "PATCH/LINKDATA_PATCH_EDEN_000.BIN"
-    ]
-    
+    created_count = 0
+    shrunk_count = 0
+
     if not os.path.exists(BACKUP_FOLDER):
         try:
             os.makedirs(BACKUP_FOLDER)
@@ -239,39 +354,149 @@ def ensure_backups():
             log.error(msg)
             return False, "error", msg
         
-    for bin_path in containers:
+    for cid, bin_path in CONTAINER_PATHS.items():
         dest = os.path.join(BACKUP_FOLDER, bin_path)
-        
-        if os.path.exists(bin_path) and not os.path.exists(dest):
-            try:
-                dest_dir = os.path.dirname(dest)
-                if not os.path.exists(dest_dir):
-                    os.makedirs(dest_dir)
-                shutil.copy2(bin_path, dest)
-            except Exception as e:
-                msg = f"Failed to back up {bin_path}: {e}"
-                log.error(msg)
-                backup_errors.append(msg)
+        metadata_size = METADATA_SIZE_MAP.get(cid)
+
+        if metadata_size is None or not os.path.exists(bin_path):
+            continue
+
+        try:
+            result = write_toc_backup(bin_path, dest, metadata_size)
+            if result == "created":
+                created_count += 1
+            elif result == "shrunk":
+                shrunk_count += 1
+        except Exception as e:
+            msg = f"Failed to back up TOC for {bin_path}: {e}"
+            log.error(msg)
+            backup_errors.append(msg)
 
     if backup_errors:
         return False, "warning", "Some backups could not be created:\n\n" + "\n".join(backup_errors)
+
+    if created_count or shrunk_count:
+        log.info(
+            "TOC backups ready: created %d, converted from full backups %d",
+            created_count,
+            shrunk_count,
+        )
 
     return True, "info", ""
 
 def setup_lilac_styles(root: tk.Misc) -> ttk.Style:
     """
-    Create/refresh lilac ttk styles for the given Tk interpreter
+    Create/refresh Katsuki blast ttk styles for the given Tk interpreter
     """
     style = ttk.Style(master=root)
-    
+
     try:
         style.theme_use("clam")
     except tk.TclError:
         pass
 
-    style.configure("Lilac.TFrame", background=LILAC)
-    style.configure("Lilac.TLabel", background=LILAC, foreground="black", padding=0)
+    style.configure("Lilac.TFrame", background=BLAST_THEME["bg"])
+    style.configure("Lilac.TLabel", background=BLAST_THEME["bg"], foreground=BLAST_THEME["text"], padding=0)
     style.map("Lilac.TLabel", background=[("active", LILAC)])
+    style.configure(
+        "TButton",
+        background=BLAST_THEME["panel_soft"],
+        foreground=BLAST_THEME["text"],
+        borderwidth=1,
+        relief="flat",
+        padding=(10, 6),
+        focusthickness=1,
+        focuscolor=BLAST_THEME["accent"],
+    )
+    style.map(
+        "TButton",
+        background=[
+            ("disabled", BLAST_THEME["panel"]),
+            ("pressed", BLAST_THEME["accent_deep"]),
+            ("active", BLAST_THEME["accent"]),
+        ],
+        foreground=[
+            ("disabled", BLAST_THEME["text_muted"]),
+            ("pressed", BLAST_THEME["text"]),
+            ("active", BLAST_THEME["text_dark"]),
+        ],
+    )
+    style.configure(
+        "TNotebook",
+        background=BLAST_THEME["bg"],
+        borderwidth=0,
+        tabmargins=(0, 0, 0, 0),
+    )
+    style.configure(
+        "TNotebook.Tab",
+        background=BLAST_THEME["panel_alt"],
+        foreground=BLAST_THEME["text_muted"],
+        padding=(16, 8),
+        borderwidth=0,
+    )
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", BLAST_THEME["accent"]), ("active", BLAST_THEME["panel_soft"])],
+        foreground=[("selected", BLAST_THEME["text_dark"]), ("active", BLAST_THEME["text"])],
+    )
+    style.configure(
+        "TProgressbar",
+        troughcolor=BLAST_THEME["panel"],
+        background=BLAST_THEME["accent"],
+        bordercolor=BLAST_THEME["panel"],
+        lightcolor=BLAST_THEME["accent_bright"],
+        darkcolor=BLAST_THEME["accent_deep"],
+    )
+    style.configure(
+        "Vertical.TScrollbar",
+        background=BLAST_THEME["panel_soft"],
+        troughcolor=BLAST_THEME["bg_alt"],
+        bordercolor=BLAST_THEME["panel"],
+        arrowcolor=BLAST_THEME["accent_bright"],
+        relief="flat",
+    )
+    style.configure(
+        "TCombobox",
+        fieldbackground=BLAST_THEME["field"],
+        background=BLAST_THEME["panel_soft"],
+        foreground=BLAST_THEME["text_dark"],
+        arrowcolor=BLAST_THEME["accent"],
+        bordercolor=BLAST_THEME["border"],
+        lightcolor=BLAST_THEME["field"],
+        darkcolor=BLAST_THEME["field_alt"],
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", BLAST_THEME["field"])],
+        foreground=[("readonly", BLAST_THEME["text_dark"])],
+        selectbackground=[("readonly", BLAST_THEME["accent_bright"])],
+        selectforeground=[("readonly", BLAST_THEME["text_dark"])],
+    )
+    style.configure(
+        "Treeview",
+        background=BLAST_THEME["panel_alt"],
+        fieldbackground=BLAST_THEME["panel_alt"],
+        foreground=BLAST_THEME["text"],
+        bordercolor=BLAST_THEME["border"],
+        rowheight=24,
+    )
+    style.map(
+        "Treeview",
+        background=[("selected", BLAST_THEME["accent"])],
+        foreground=[("selected", BLAST_THEME["text_dark"])],
+    )
+    style.configure(
+        "Treeview.Heading",
+        background=BLAST_THEME["panel_soft"],
+        foreground=BLAST_THEME["text"],
+        bordercolor=BLAST_THEME["border"],
+        relief="flat",
+    )
+    style.map(
+        "Treeview.Heading",
+        background=[("active", BLAST_THEME["accent_bright"])],
+        foreground=[("active", BLAST_THEME["text_dark"])],
+    )
 
     return style
 
@@ -287,128 +512,6 @@ def resize_and_pad(image_path):
     with Image.open(image_path) as img:
         img = ImageOps.pad(img, (500, 500), color=LILAC_RGB, centering=(0.5, 0.5))
         return img
-
-def ensure_dir(path: str):
-    """If something exists and it's a file, a safe alternate folder name is used"""
-    if os.path.exists(path) and not os.path.isdir(path):
-        alt = path + "_dir"
-        log.warning("ensure_dir: %s exists as file, using %s", path, alt)
-        path = alt
-    os.makedirs(path, exist_ok=True)
-    return path
-
-def match_known_signature(data: bytes, off: int):
-    if off < 0 or off + 4 > len(data):
-        return None
-
-    sig4 = data[off:off+4]
-    hit = EXT4.get(sig4)
-    if hit:
-        return hit
-    if off + 12 <= len(data):
-        try:
-            total_out, csize = struct.unpack_from("<II", data, off)
-            if 0 < total_out <= 0x40000000 and 0 < csize <= (len(data) - (off + 8)):
-                if is_zlib_header(data[off+8:off+10]):
-                    return "zl"
-        except struct.error:
-            pass
-
-    return None
-
-def is_real_subcontainer(raw_data: bytes, offsets: list[int], table_end: int, probe_limit: int = 8) -> bool:
-    """
-    Treat as subcontainer only if a few offsets actually point to known file signatures
-    """
-    uniq = sorted(set(o for o in offsets if table_end <= o < len(raw_data)))
-    if len(uniq) < 2:
-        return False
-
-    hits = 0
-    checked = 0
-
-    for off in uniq[:probe_limit]:
-        checked += 1
-        if match_known_signature(raw_data, off):
-            hits += 1
-
-    return hits >= 2
-
-def read_subcontainer_toc(data: bytes, *, max_count: int = 100_000):
-    """
-    Reads: u32 count, then count u32 offsets
-    Returns count, offsets, table_end, or None
-    """
-    n = len(data)
-    if n < 8:
-        return None
-
-    try:
-        count = struct.unpack_from("<I", data, 0)[0]
-    except struct.error:
-        return None
-
-    if count < 2 or count > max_count:
-        return None
-
-    table_end = 4 + count * 4
-    if table_end > n:
-        return None
-
-    try:
-        offsets = list(struct.unpack_from("<" + "I" * count, data, 4))
-    except struct.error:
-        return None
-
-    return count, offsets, table_end
-
-def is_zlib_header(b: bytes) -> bool:
-    if len(b) < 2:
-        return False
-    cmf, flg = b[0], b[1]
-    if (cmf & 0x0F) != 8 or (cmf >> 4) > 7:
-        return False
-    return ((cmf << 8) + flg) % 31 == 0
-
-def decompress_zl_bytes(buf: bytes) -> bytes:
-    if len(buf) < 8:
-        raise ValueError("ZL too small")
-
-    total_out, csize = struct.unpack_from("<II", buf, 0)
-    off = 8
-    out = bytearray()
-    chunk_idx = 0
-
-    # u32 total_out/raw zlib stream, no csize field
-    if csize > len(buf) - off and is_zlib_header(buf[4:6]):
-        return zlib.decompress(buf[4:])
-
-    while len(out) < total_out:
-        if csize <= 0:
-            raise ValueError(f"ZL chunk {chunk_idx}: invalid comp_size={csize}")
-        if off + csize > len(buf):
-            raise ValueError(f"ZL chunk {chunk_idx}: comp_size overruns file")
-
-        comp = buf[off:off + csize]
-        if not is_zlib_header(comp[:2]):
-            break  # likely padding section
-
-        out.extend(zlib.decompress(comp))
-        off += csize
-        chunk_idx += 1
-
-        if len(out) >= total_out:
-            break
-
-        if off + 4 > len(buf):
-            break
-        csize = struct.unpack_from("<I", buf, off)[0]
-        off += 4
-
-    if len(out) < total_out:
-        raise ValueError(f"ZL decompressed short: got {len(out)} expected {total_out}")
-
-    return bytes(out[:total_out])
 
 def parse_taildata(file_data: bytes):
     if len(file_data) < TAILDATA_SIZE:
@@ -437,103 +540,15 @@ def has_plausible_taildata(tail_info) -> bool:
         return False
     return ((tail_info["meta_offset"] - 0x10) % 16) == 0
 
+def parse_valid_taildata(file_data: bytes):
+    tail_info = parse_taildata(file_data)
+    return tail_info if has_plausible_taildata(tail_info) else None
+
 def split_payload_and_taildata(file_data: bytes):
     tail_info = parse_taildata(file_data)
     if not has_plausible_taildata(tail_info):
         return file_data, b"", None
     return file_data[:-TAILDATA_SIZE], file_data[-TAILDATA_SIZE:], tail_info
-
-def subcontainer_file_sort_key(path: str):
-    stem = os.path.splitext(os.path.basename(path))[0]
-    parts = stem.rsplit("_", 1)
-    if len(parts) == 2 and parts[1].isdigit():
-        return (0, int(parts[1]), stem.lower())
-    return (1, stem.lower())
-
-def next_available_output_path(path: str) -> str:
-    if not os.path.exists(path):
-        return path
-
-    root, ext = os.path.splitext(path)
-    counter = 1
-    while True:
-        candidate = f"{root}_{counter}{ext}"
-        if not os.path.exists(candidate):
-            return candidate
-        counter += 1
-
-def rebuild_subcontainer_from_folder(folder_path, original_subcontainer_path, output_path=None):
-    if not os.path.isdir(folder_path):
-        raise ValueError("Selected subcontainer folder does not exist.")
-    if not os.path.isfile(original_subcontainer_path):
-        raise ValueError("Selected original subcontainer file does not exist.")
-
-    with open(original_subcontainer_path, "rb") as f:
-        original_blob = f.read()
-
-    original_raw, taildata_bytes, _tail_info = split_payload_and_taildata(original_blob)
-    if not taildata_bytes:
-        raise ValueError("Original subcontainer must be an unpacked Katsuki file with taildata appended.")
-
-    toc_info = read_subcontainer_toc(original_raw)
-    if not toc_info:
-        raise ValueError("Original file does not contain a readable subcontainer TOC.")
-
-    count, offsets, table_end = toc_info
-    if not is_real_subcontainer(original_raw, offsets, table_end):
-        raise ValueError("Original file does not look like a valid subcontainer.")
-
-    unique_offsets = sorted(set(off for off in offsets if table_end <= off < len(original_raw)))
-    folder_files = [
-        os.path.join(folder_path, name)
-        for name in os.listdir(folder_path)
-        if os.path.isfile(os.path.join(folder_path, name))
-    ]
-    folder_files.sort(key=subcontainer_file_sort_key)
-
-    if not folder_files:
-        raise ValueError("Selected subcontainer folder does not contain any files to rebuild.")
-    if len(folder_files) != len(unique_offsets):
-        raise ValueError(
-            f"Subcontainer file count mismatch. Folder has {len(folder_files)} file(s), "
-            f"but the original TOC maps to {len(unique_offsets)} unique payload slot(s)."
-        )
-
-    prefix_end = unique_offsets[0] if unique_offsets else table_end
-    rebuilt_prefix = bytearray(original_raw[:prefix_end])
-    rebuilt_payload = bytearray()
-    new_unique_offsets = []
-
-    cursor = prefix_end
-    for file_path in folder_files:
-        with open(file_path, "rb") as f:
-            blob = f.read()
-        new_unique_offsets.append(cursor)
-        rebuilt_payload.extend(blob)
-        cursor += len(blob)
-
-    offset_map = {
-        old_offset: new_offset
-        for old_offset, new_offset in zip(unique_offsets, new_unique_offsets)
-    }
-
-    struct.pack_into("<I", rebuilt_prefix, 0, count)
-    for idx, old_offset in enumerate(offsets):
-        struct.pack_into("<I", rebuilt_prefix, 4 + idx * 4, offset_map.get(old_offset, old_offset))
-
-    rebuilt_blob = bytes(rebuilt_prefix) + bytes(rebuilt_payload) + taildata_bytes
-
-    if output_path is None:
-        src_dir = os.path.dirname(original_subcontainer_path)
-        src_name = os.path.basename(original_subcontainer_path)
-        base, ext = os.path.splitext(src_name)
-        output_path = os.path.join(src_dir, f"{base}_rebuilt{ext}")
-    output_path = next_available_output_path(output_path)
-
-    with open(output_path, "wb") as f:
-        f.write(rebuilt_blob)
-
-    return output_path, f"Rebuilt subcontainer with {len(folder_files)} payload(s)."
 
 class BackgroundUnpacker:
     """
@@ -545,6 +560,7 @@ class BackgroundUnpacker:
     def __init__(self, progress_callback, ui_notify=None):
         self.progress_callback = progress_callback
         self.ui_notify = ui_notify
+        self.filename_ref = load_filename_ref()
 
     def detect_ext(self, data: bytes) -> str:
         if not data:
@@ -631,7 +647,7 @@ class BackgroundUnpacker:
             f.seek(0, 2)
             total_size = f.tell()
 
-            # Sort by offset since some bins do not have files packed in sequential order
+            # Sort by offset since some bins don't have files packed in sequential order
             valid_toc = [e for e in toc if e['off'] > 0]
             valid_toc.sort(key=lambda x: x['off'])
 
@@ -667,8 +683,7 @@ class BackgroundUnpacker:
                     except Exception as e:
                         log.warning("ZL decompression failed for entry %06d: %s", entry['idx'], e)
 
-                # Append Taildata
-                # Essential for the Mod Manager to map this file back to the TOC later
+                # Append Taildata for the mod manager
                 is_comp = 1 if entry['ds'] > 0 else 0
                 taildata = TAILDATA_STRUCT.pack(
                     container_id, 
@@ -680,44 +695,22 @@ class BackgroundUnpacker:
                     entry['idx']
                 )
 
-                filename = f"file_{entry['idx']:06d}{ext}"
-                output_path = os.path.join(folder_name, filename)
+                output_path, filename = resolve_output_path(
+                    folder_name,
+                    self.filename_ref,
+                    container_id,
+                    entry['idx'],
+                    ext,
+                )
 
                 with open(output_path, "wb") as out:
                     out.write(raw_data)
                     out.write(taildata)
 
-                toc_info = None
-                if ext != ".zl":
-                    toc_info = read_subcontainer_toc(raw_data)
-                    if toc_info:
-                        _count, offsets, table_end = toc_info
-
-                        if is_real_subcontainer(raw_data, offsets, table_end):
-                            sub_dir = ensure_dir(os.path.join(folder_name, f"file_{entry['idx']:06d}"))
-
-                            uniq = sorted(set(o for o in offsets if o >= table_end))
-                            n2 = len(raw_data)
-
-                            for j, off2 in enumerate(uniq):
-                                if off2 >= n2:
-                                    break
-
-                                next_off2 = uniq[j + 1] if j + 1 < len(uniq) else n2
-                                if next_off2 > n2:
-                                    next_off2 = n2
-
-                                size2 = next_off2 - off2
-                                if size2 <= 0:
-                                    continue
-
-                                blob = raw_data[off2:off2 + size2]
-                                blob_ext = self.detect_ext(blob) if blob else ".bin"
-                                blob_name = f"file_{entry['idx']:06d}_{j:04d}{blob_ext}"
-                                blob_path = os.path.join(sub_dir, blob_name)
-
-                                with open(blob_path, "wb") as bout:
-                                    bout.write(blob)
+                try:
+                    unpack_nested_resource(output_path, blob=raw_data)
+                except Exception as e:
+                    log.warning("Nested subcontainer unpack failed for %s: %s", filename, e)
 
                 if self.progress_callback and i % 100 == 0:
                     self.progress_callback(i + 1, len(valid_toc), f"Unpacking: {filename}")
@@ -727,32 +720,13 @@ class BackgroundUnpacker:
 
 class ModManagerLogic:
     def __init__(self):
-        self.containers = {
-            0: "LINKDATA_A.BIN", 
-            1: "LINKDATA_B.BIN", 
-            2: "LINKDATA_C.BIN", 
-            3: "LINKDATA_D.BIN",
-            4: "LINKDATA_DEBUG.BIN", 
-            5: "LINKDATA_DLC.BIN",
-            6: "LINKDATA_PLATFORM_DX11.BIN", 
-            7: "LINKDATA_PLATFORM_EDEN_DX11.BIN",
-            8: "REGION/LINKDATA_REGION_JP.BIN",
-            9: "REGION/LINKDATA_REGION_AS.BIN", 
-            10: "REGION/LINKDATA_REGION_EDEN_AS.BIN", 
-            11: "REGION/LINKDATA_REGION_EDEN_EU.BIN", 
-            12: "REGION/LINKDATA_REGION_EDEN_JP.BIN",
-            13: "REGION/LINKDATA_REGION_EU.BIN", 
-            14: "EX/LINKDATA_EX_MASTER.BIN",
-            15: "PATCH/LINKDATA_PATCH_000.BIN", 
-            16: "PATCH/LINKDATA_PATCH_EDEN_000.BIN",
-        }
+        self.containers = dict(CONTAINER_PATHS)
         self.ledger_path = "applied_mods.txt"
         self.installer_state_path = "installer_state.json"
 
     def load_installer_state(self):
         if not os.path.exists(self.installer_state_path):
             return {}
-
         try:
             with open(self.installer_state_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -841,7 +815,7 @@ class ModManagerLogic:
                 file_size = int.from_bytes(mod_f.read(4), "little")
                 file_data = mod_f.read(file_size)
 
-                tail_info = parse_taildata(file_data)
+                tail_info = parse_valid_taildata(file_data)
                 if not tail_info:
                     continue
 
@@ -884,7 +858,7 @@ class ModManagerLogic:
                         file_size = int.from_bytes(mod_f.read(4), "little")
                         file_data = mod_f.read(file_size)
 
-                        tail_info = parse_taildata(file_data)
+                        tail_info = parse_valid_taildata(file_data)
                         if not tail_info:
                             continue
 
@@ -907,7 +881,7 @@ class ModManagerLogic:
 
         for payload in selected_payloads:
             file_data = payload["file_data"]
-            tail_info = parse_taildata(file_data)
+            tail_info = parse_valid_taildata(file_data)
             if not tail_info:
                 invalid_count += 1
                 continue
@@ -979,7 +953,7 @@ class ModManagerLogic:
         invalid_count = 0
 
         for file_data in payload_blobs:
-            tail_info = parse_taildata(file_data)
+            tail_info = parse_valid_taildata(file_data)
             if not tail_info:
                 invalid_count += 1
                 continue
@@ -1080,85 +1054,110 @@ class ModManagerLogic:
     def get_mod_header(self, mod_path):
         """Detects signature and parses standard/installer formats"""
         if not os.path.exists(mod_path): return None
-        
-        with open(mod_path, "rb") as f:
-            sig_len = int.from_bytes(f.read(1), "little")
-            sig = f.read(sig_len)
-            
-            def read_str(size_bytes=1):
-                length = int.from_bytes(f.read(size_bytes), "little")
-                return f.read(length).decode('utf-8', errors='ignore')
 
-            if sig == b'AOT2MF':
-                is_release = int.from_bytes(f.read(1), "little") # Catch global flag
-                genre_byte = int.from_bytes(f.read(1), "little")
-                file_count = int.from_bytes(f.read(4), "little")
-                author = read_str(1)
-                version = read_str(1)
-                description = self.read_krle_description(f)
-                
-                img_count = int.from_bytes(f.read(1), "little")
-                images = []
-                for _ in range(img_count):
-                    size = int.from_bytes(f.read(4), "little")
-                    images.append(f.read(size))
-                
-                audio_data = None
-                has_audio = int.from_bytes(f.read(1), "little")
-                if has_audio:
-                    a_size = int.from_bytes(f.read(4), "little")
-                    audio_data = f.read(a_size)
-                
-                return {
-                    "type": "standard",
-                    "is_release": is_release,
-                    "meta": {"author": author, "version": version, "description": description, "genre": REV_GENRE_MAP.get(genre_byte, "Unknown")},
-                    "images": images,
-                    "audio": audio_data,
-                    "file_count": file_count,
-                    "payload_offset": f.tell()
-                }
+        try:
+            with open(mod_path, "rb") as f:
+                def read_exact(size):
+                    data = f.read(size)
+                    if len(data) != size:
+                        raise EOFError("Unexpected end of mod package header")
+                    return data
 
-            elif sig == b'AOT2MI':
-                is_release = int.from_bytes(f.read(1), "little") # Catch global flag
-                genre_byte = int.from_bytes(f.read(1), "little")
-                name = read_str(1)
-                author = read_str(1)
-                version = read_str(1)
-                description = self.read_krle_description(f)
-                
-                audio_data = None
-                has_audio = int.from_bytes(f.read(1), "little")
-                if has_audio:
-                    a_size = int.from_bytes(f.read(4), "little")
-                    audio_data = f.read(a_size)
-                
-                return {
-                    "type": "installer",
-                    "is_release": is_release,
-                    "meta": {"name": name, "author": author, "version": version, "description": description, "genre": REV_GENRE_MAP.get(genre_byte, "Unknown")},
-                    "images": [], 
-                    "audio": audio_data,
-                    "payload_offset": f.tell()
-                }
-                
+                def read_int(size):
+                    return int.from_bytes(read_exact(size), "little")
+
+                sig_len = read_int(1)
+                sig = read_exact(sig_len)
+
+                def read_str(size_bytes=1):
+                    length = read_int(size_bytes)
+                    return read_exact(length).decode('utf-8', errors='ignore')
+
+                if sig == b'AOT2MF':
+                    is_release = read_int(1) # Catch global flag
+                    genre_byte = read_int(1)
+                    file_count = read_int(4)
+                    author = read_str(1)
+                    version = read_str(1)
+                    description = self.read_krle_description(f)
+
+                    img_count = read_int(1)
+                    images = []
+                    for _ in range(img_count):
+                        size = read_int(4)
+                        images.append(read_exact(size))
+
+                    audio_data = None
+                    has_audio = read_int(1)
+                    if has_audio:
+                        a_size = read_int(4)
+                        audio_data = read_exact(a_size)
+
+                    return {
+                        "type": "standard",
+                        "is_release": is_release,
+                        "meta": {"author": author, "version": version, "description": description, "genre": REV_GENRE_MAP.get(genre_byte, "Unknown")},
+                        "images": images,
+                        "audio": audio_data,
+                        "file_count": file_count,
+                        "payload_offset": f.tell()
+                    }
+
+                elif sig == b'AOT2MI':
+                    is_release = read_int(1) # Catch global flag
+                    genre_byte = read_int(1)
+                    name = read_str(1)
+                    author = read_str(1)
+                    version = read_str(1)
+                    description = self.read_krle_description(f)
+
+                    audio_data = None
+                    has_audio = read_int(1)
+                    if has_audio:
+                        a_size = read_int(4)
+                        audio_data = read_exact(a_size)
+
+                    return {
+                        "type": "installer",
+                        "is_release": is_release,
+                        "meta": {"name": name, "author": author, "version": version, "description": description, "genre": REV_GENRE_MAP.get(genre_byte, "Unknown")},
+                        "images": [],
+                        "audio": audio_data,
+                        "payload_offset": f.tell()
+                    }
+        except Exception:
+            log.warning("Could not parse mod package header: %s", mod_path, exc_info=True)
+
         return None
 
     def read_krle_description(self, f):
         """Reads the hybrid Zlib/KRLE 5K text block"""
-        flag = int.from_bytes(f.read(1), "little")
-        payload_len = int.from_bytes(f.read(2), "little")
+        flag_raw = f.read(1)
+        payload_len_raw = f.read(2)
+        if len(flag_raw) != 1 or len(payload_len_raw) != 2:
+            raise EOFError("Unexpected end of mod description block")
+
+        flag = int.from_bytes(flag_raw, "little")
+        payload_len = int.from_bytes(payload_len_raw, "little")
+        if payload_len > 5000:
+            raise ValueError("Mod description block is larger than 5000 bytes")
+
         payload = f.read(payload_len)
-        
+        if len(payload) != payload_len:
+            raise EOFError("Unexpected end of mod description payload")
+
         if flag == 0:
             pad_count = 5000 - payload_len
-            f.read(pad_count)
+            if len(f.read(pad_count)) != pad_count:
+                raise EOFError("Unexpected end of mod description padding")
             return payload.decode('utf-8', errors='ignore')
         elif flag == 1:
-            f.read(2)
+            if len(f.read(2)) != 2:
+                raise EOFError("Unexpected end of mod description padding")
             return payload.decode('utf-8', errors='ignore')
         elif flag == 2:
-            f.read(2)
+            if len(f.read(2)) != 2:
+                raise EOFError("Unexpected end of mod description padding")
             try:
                 b_text = zlib.decompress(payload)
             except zlib.error:
@@ -1169,7 +1168,7 @@ class ModManagerLogic:
 
     def inject_raw_payload(self, file_data):
         """Injects a single file blob into the BINs"""
-        tail_info = parse_taildata(file_data)
+        tail_info = parse_valid_taildata(file_data)
         if not tail_info:
             return False
 
@@ -1220,7 +1219,7 @@ class ModManagerLogic:
                     file_size = int.from_bytes(mod_f.read(4), "little")
                     file_data = mod_f.read(file_size)
                     
-                    tail_info = parse_taildata(file_data)
+                    tail_info = parse_valid_taildata(file_data)
                     if not tail_info:
                         continue
 
@@ -1314,22 +1313,6 @@ class ModManagerLogic:
     
     def disable_all(self):
         """ Restores metadata blocks from original backups/truncates containers to remove all appended mod data"""
-        meta_size_map = {
-            0: BIN1_METADATA_SIZE, 1: BIN2_METADATA_SIZE, 2: BIN3_METADATA_SIZE, 3: BIN4_METADATA_SIZE,
-            4: BIN5_METADATA_SIZE, 5: BIN6_METADATA_SIZE, 6: BIN7_METADATA_SIZE, 7: BIN8_METADATA_SIZE,
-            8: BIN9_METADATA_SIZE, 9: BIN10_METADATA_SIZE, 10: BIN11_METADATA_SIZE, 11: BIN12_METADATA_SIZE,
-            12: BIN13_METADATA_SIZE, 13: BIN14_METADATA_SIZE, 14: BIN15_METADATA_SIZE, 15: BIN16_METADATA_SIZE,
-            16: BIN17_METADATA_SIZE
-        }
-
-        file_size_map = {
-            0: BIN1_SIZE, 1: BIN2_SIZE, 2: BIN3_SIZE, 3: BIN4_SIZE,
-            4: BIN5_SIZE, 5: BIN6_SIZE, 6: BIN7_SIZE, 7: BIN8_SIZE,
-            8: BIN9_SIZE, 9: BIN10_SIZE, 10: BIN11_SIZE, 11: BIN12_SIZE,
-            12: BIN13_SIZE, 13: BIN14_SIZE, 14: BIN15_SIZE, 15: BIN16_SIZE,
-            16: BIN17_SIZE
-        }
-
         missing_backups = []
         restore_errors = []
 
@@ -1344,14 +1327,13 @@ class ModManagerLogic:
                 continue
 
             try:
-                size_to_read = meta_size_map.get(cid)
-                target_truncate_size = file_size_map.get(cid)
+                size_to_read = METADATA_SIZE_MAP.get(cid)
+                target_truncate_size = FILE_SIZE_MAP.get(cid)
 
                 if size_to_read is None or target_truncate_size is None:
                     continue
 
-                with open(backup_path, "rb") as bf:
-                    original_meta = bf.read(size_to_read)
+                original_meta = read_metadata_block(backup_path, size_to_read)
 
                 with open(name, "r+b") as f:
                     f.seek(0)
@@ -1396,7 +1378,12 @@ class ModPacker:
     def validate_taildata(self, file_path):
         if os.path.getsize(file_path) < TAILDATA_SIZE:
             return False
-        return True
+        try:
+            with open(file_path, "rb") as f:
+                f.seek(-TAILDATA_SIZE, 2)
+                return parse_valid_taildata(f.read(TAILDATA_SIZE)) is not None
+        except OSError:
+            return False
 
     def write_string(self, f, text, size_bytes=1):
         b_text = text.encode('utf-8')
@@ -1449,6 +1436,16 @@ class ModPacker:
     def create_package(self, save_path, name, version, author, description, files, image_paths=[], audio_path=None, is_release=False, genre="Texture"):
         """Standard .aot2m logic"""
         try:
+            for file_path in files:
+                if not self.validate_taildata(file_path):
+                    return False, f"File missing valid Katsuki taildata ({TAILDATA_SIZE} bytes): {os.path.basename(file_path)}"
+
+            image_blobs = []
+            for img_p in image_paths[:5]:
+                dat = self.process_image(img_p)
+                if dat:
+                    image_blobs.append(dat)
+
             with open(save_path, "wb") as f:
                 f.write(len(MOD_SIGNATURE).to_bytes(1, "little"))
                 f.write(MOD_SIGNATURE)
@@ -1460,13 +1457,10 @@ class ModPacker:
                 self.write_string(f, version, 1)
                 self.write_krle_description(f, description, is_release)
 
-                valid_imgs = image_paths[:5]
-                f.write(len(valid_imgs).to_bytes(1, "little"))
-                for img_p in valid_imgs:
-                    dat = self.process_image(img_p)
-                    if dat:
-                        f.write(len(dat).to_bytes(4, "little"))
-                        f.write(dat)
+                f.write(len(image_blobs).to_bytes(1, "little"))
+                for dat in image_blobs:
+                    f.write(len(dat).to_bytes(4, "little"))
+                    f.write(dat)
 
                 if audio_path and os.path.exists(audio_path):
                     with open(audio_path, "rb") as af:
@@ -1477,8 +1471,6 @@ class ModPacker:
                 else: f.write((0).to_bytes(1, "little"))
 
                 for file_path in files:
-                    if not self.validate_taildata(file_path):
-                        return False, f"File missing taildata ({TAILDATA_SIZE} bytes): {os.path.basename(file_path)}"
                     size = os.path.getsize(file_path)
                     f.write(size.to_bytes(4, "little"))
                     with open(file_path, "rb") as src: f.write(src.read())
@@ -1488,6 +1480,19 @@ class ModPacker:
     def create_installer_package(self, save_path, name, version, author, description, audio_path, arch_data, tree_obj, is_release=False, genre="Texture"):
         """Creates an .aot2mi installer with separated per-option resources"""
         try:
+            groups = list(tree_obj.get_children(""))
+            option_total = 0
+            for g_id in groups:
+                options = list(tree_obj.get_children(g_id))
+                option_total += len(options)
+                for o_id in options:
+                    for file_path in arch_data[o_id].get('files', []):
+                        if not self.validate_taildata(file_path):
+                            return False, f"File missing valid Katsuki taildata ({TAILDATA_SIZE} bytes): {os.path.basename(file_path)}"
+
+            if not groups or option_total <= 0:
+                return False, "Installer packages need at least one group and one option."
+
             with open(save_path, "wb") as f:
                 f.write(len(INSTALLER_SIGNATURE).to_bytes(1, "little"))
                 f.write(INSTALLER_SIGNATURE)
@@ -1506,7 +1511,6 @@ class ModPacker:
                         f.write(audio_dat)
                 else: f.write((0).to_bytes(1, "little"))
 
-                groups = tree_obj.get_children("")
                 f.write(len(groups).to_bytes(4, "little"))
 
                 for g_id in groups:
@@ -1531,8 +1535,6 @@ class ModPacker:
 
                         f.write(len(o_data['files']).to_bytes(4, "little"))
                         for file_path in o_data['files']:
-                            if not self.validate_taildata(file_path):
-                                return False, f"File missing taildata ({TAILDATA_SIZE} bytes): {os.path.basename(file_path)}"
                             size = os.path.getsize(file_path)
                             f.write(size.to_bytes(4, "little"))
                             with open(file_path, "rb") as src: f.write(src.read())
