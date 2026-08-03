@@ -260,18 +260,19 @@ class BlastMapCanvas(tk.Canvas):
 
         if not self.controller.mod_records:
             self.create_text(width / 2, height / 2 - 10, text="No mods in the blast chamber", fill=TEXT, font=("Impact", 24))
-            self.create_text(width / 2, height / 2 + 24, text="Drop .aot2m or .aot2mi files into the Mods folder to populate this field.", fill=TEXT_MUTED, font=("Segoe UI", 11))
+            extensions = " or ".join(self.controller.logic.mod_extensions())
+            self.create_text(width / 2, height / 2 + 24, text=f"Drop {extensions} files into the Mods folder to populate this field.", fill=TEXT_MUTED, font=("Segoe UI", 11))
 
 
 class BlastChamberWindow(tk.Toplevel):
     def __init__(self, master: tk.Misc):
         super().__init__(master)
-        self.title("Katsuki Mod Manager")
+        self.logic = ModManagerLogic()
+        self.title(f"Katsuki Mod Manager, {self.logic.profile.short_label}")
         self.geometry("1520x1000")
         self.minsize(1280, 860)
         apply_lilac_to_root(self)
 
-        self.logic = ModManagerLogic()
         self.audio_player = WinMMAudioPlayer(log=log)
         self.music_enabled = tk.BooleanVar(value=True)
         self.search_var = tk.StringVar(value="")
@@ -609,7 +610,10 @@ class BlastChamberWindow(tk.Toplevel):
         selected_name = self.current_mod.filename if self.current_mod else None
         os.makedirs("Mods", exist_ok=True)
         applied_mods = self.logic.get_applied_mods()
-        mod_files = sorted([name for name in os.listdir("Mods") if name.lower().endswith((".aot2m", ".aot2mi"))], key=str.lower)
+        mod_files = sorted(
+            [name for name in os.listdir("Mods") if name.lower().endswith(self.logic.mod_extensions())],
+            key=str.lower,
+        )
 
         self.mod_records = []
         for mod_file in mod_files:

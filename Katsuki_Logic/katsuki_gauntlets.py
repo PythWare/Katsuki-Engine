@@ -1,6 +1,7 @@
 import os, sys, struct, io, zlib, logging, ctypes, threading, json
 import tkinter as tk
 from ctypes import wintypes
+from pathlib import Path
 from tkinter import ttk
 from PIL import Image, ImageOps
 from .katsuki_sub_logic import (
@@ -9,15 +10,31 @@ from .katsuki_sub_logic import (
     rebuild_subcontainer_from_folder,
     unpack_nested_resource,
 )
-from .katsuki_ref_runtime import load_filename_ref, resolve_output_path
+from .katsuki_ref_runtime import load_profile_filename_ref, resolve_output_path
+from .katsuki_profiles import (
+    GAME_PROFILES,
+    LINKDATA_MAGIC,
+    GameProfile,
+    get_active_profile,
+    metadata_size as container_metadata_size,
+    read_container_header,
+    read_toc,
+    resolve_containers,
+)
+from .katsuki_taildata import (
+    TAILDATA_SIZE,
+    load_manifest,
+    pack_record,
+    pack_target_block,
+    parse_valid_taildata,
+    read_target_block,
+)
 
 """
 This script handles the utility logic such as unpacking, mod creation, etc
 """
 
 LILAC = "#12100F"
-MOD_SIGNATURE = b'AOT2MF'
-INSTALLER_SIGNATURE = b'AOT2MI'
 BACKUP_FOLDER = "Backups"
 LILAC_RGB = (18, 16, 15)
 BLAST_THEME = {
@@ -168,80 +185,6 @@ EXT2 = {
     b"XL": ".XL",
 }
 
-# used for truncating, disabling all mods to be precise
-BIN1_SIZE = 6_271_283_456 # A
-BIN2_SIZE = 7_756_262_400 # B
-BIN3_SIZE = 2_470_024_448 # C
-BIN4_SIZE = 4_352 # D
-BIN5_SIZE = 1_346_373_632 # DEBUG
-BIN6_SIZE = 1_015_837_184 # DLC
-BIN7_SIZE = 442_564_864 # DX11
-BIN8_SIZE = 825_832_192 # EDEN
-BIN9_SIZE = 48_940_800 # REGION_JP
-BIN10_SIZE = 96_621_824 # REGION_AS
-BIN11_SIZE = 69_428_224 # REFION_EDEN_AS
-BIN12_SIZE = 206_677_760 # REGION_EDEN_EU
-BIN13_SIZE = 32_979_200 # REGION_EDEN_JP
-BIN14_SIZE = 291_377_920 # REGION_EU
-BIN15_SIZE = 4_352 # EX_MASTER
-BIN16_SIZE = 2_543_425_024 # PATCH_000
-BIN17_SIZE = 3_648 # PATCH_EDEN_000
-
-# used during truncating, revering metadata to original values by grabbing the data from Backups
-BIN1_METADATA_SIZE = 215_280 # A
-BIN2_METADATA_SIZE = 12_576 # B
-BIN3_METADATA_SIZE = 150_640 # C
-BIN4_METADATA_SIZE = 16 # D
-BIN5_METADATA_SIZE = 7_792 # DEBUG
-BIN6_METADATA_SIZE = 880 # DLC
-BIN7_METADATA_SIZE = 18_016 # DX11
-BIN8_METADATA_SIZE = 5_936 # EDEN
-BIN9_METADATA_SIZE = 6_528 # REGION_JP
-BIN10_METADATA_SIZE = 13_040 # REGION_AS
-BIN11_METADATA_SIZE = 8_352 # REFION_EDEN_AS
-BIN12_METADATA_SIZE = 26_512 # REGION_EDEN_EU
-BIN13_METADATA_SIZE = 4_384 # REGION_EDEN_JP
-BIN14_METADATA_SIZE = 39_008 # REGION_EU
-BIN15_METADATA_SIZE = 16 # EX_MASTER
-BIN16_METADATA_SIZE = 44_016 # PATCH_000
-BIN17_METADATA_SIZE = 3_632 # PATCH_EDEN_000
-
-CONTAINER_PATHS = {
-    0: "LINKDATA_A.BIN",
-    1: "LINKDATA_B.BIN",
-    2: "LINKDATA_C.BIN",
-    3: "LINKDATA_D.BIN",
-    4: "LINKDATA_DEBUG.BIN",
-    5: "LINKDATA_DLC.BIN",
-    6: "LINKDATA_PLATFORM_DX11.BIN",
-    7: "LINKDATA_PLATFORM_EDEN_DX11.BIN",
-    8: "REGION/LINKDATA_REGION_JP.BIN",
-    9: "REGION/LINKDATA_REGION_AS.BIN",
-    10: "REGION/LINKDATA_REGION_EDEN_AS.BIN",
-    11: "REGION/LINKDATA_REGION_EDEN_EU.BIN",
-    12: "REGION/LINKDATA_REGION_EDEN_JP.BIN",
-    13: "REGION/LINKDATA_REGION_EU.BIN",
-    14: "EX/LINKDATA_EX_MASTER.BIN",
-    15: "PATCH/LINKDATA_PATCH_000.BIN",
-    16: "PATCH/LINKDATA_PATCH_EDEN_000.BIN",
-}
-
-METADATA_SIZE_MAP = {
-    0: BIN1_METADATA_SIZE, 1: BIN2_METADATA_SIZE, 2: BIN3_METADATA_SIZE, 3: BIN4_METADATA_SIZE,
-    4: BIN5_METADATA_SIZE, 5: BIN6_METADATA_SIZE, 6: BIN7_METADATA_SIZE, 7: BIN8_METADATA_SIZE,
-    8: BIN9_METADATA_SIZE, 9: BIN10_METADATA_SIZE, 10: BIN11_METADATA_SIZE, 11: BIN12_METADATA_SIZE,
-    12: BIN13_METADATA_SIZE, 13: BIN14_METADATA_SIZE, 14: BIN15_METADATA_SIZE, 15: BIN16_METADATA_SIZE,
-    16: BIN17_METADATA_SIZE,
-}
-
-FILE_SIZE_MAP = {
-    0: BIN1_SIZE, 1: BIN2_SIZE, 2: BIN3_SIZE, 3: BIN4_SIZE,
-    4: BIN5_SIZE, 5: BIN6_SIZE, 6: BIN7_SIZE, 7: BIN8_SIZE,
-    8: BIN9_SIZE, 9: BIN10_SIZE, 10: BIN11_SIZE, 11: BIN12_SIZE,
-    12: BIN13_SIZE, 13: BIN14_SIZE, 14: BIN15_SIZE, 15: BIN16_SIZE,
-    16: BIN17_SIZE,
-}
-
 GENRE_MAP = {"All": 1, "Texture": 2, "Audio": 3, "Model": 4, "Overhaul": 5}
 REV_GENRE_MAP = {1: "All", 2: "Texture", 3: "Audio", 4: "Model", 5: "Overhaul"}
 
@@ -259,9 +202,6 @@ SND_MEMORY   = 0x0004
 SND_LOOP     = 0x0008
 SND_PURGE    = 0x0040
 
-TAILDATA_STRUCT = struct.Struct("<BIIIIBI")
-TAILDATA_SIZE = TAILDATA_STRUCT.size
-    
 def setup_logging() -> str:
     base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     log_dir = os.path.join(base_dir, "Logs")
@@ -337,11 +277,45 @@ def write_toc_backup(source_path, backup_path, metadata_size):
 
     return "shrunk" if read_path == backup_path else "created"
 
-def ensure_backups():
+def backup_manifest_path(profile: GameProfile) -> str:
+    return os.path.join(BACKUP_FOLDER, profile.backup_manifest_filename)
+
+
+def load_backup_manifest(profile: GameProfile) -> dict:
+    """Pristine container sizes, recorded the first time a backup is taken"""
+    try:
+        with open(backup_manifest_path(profile), "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_backup_manifest(profile: GameProfile, manifest: dict) -> None:
+    try:
+        os.makedirs(BACKUP_FOLDER, exist_ok=True)
+        with open(backup_manifest_path(profile), "w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, indent=2)
+    except OSError as exc:
+        log.warning("Could not write backup manifest: %s", exc)
+
+
+def original_container_size(profile: GameProfile, container_id: int, manifest: dict | None = None):
+    """Pristine size for a container or None when it was never recorded"""
+    if manifest is None:
+        manifest = load_backup_manifest(profile)
+    entry = manifest.get("containers", {}).get(str(container_id))
+    if isinstance(entry, dict) and isinstance(entry.get("original_size"), int):
+        return entry["original_size"]
+    return None
+
+
+def ensure_backups(profile: GameProfile | None = None):
     """
     Creates metadata only TOC backups for original game containers
     preserving subdirectory structures
     """
+    profile = profile or get_active_profile()
     backup_errors = []
     created_count = 0
     shrunk_count = 0
@@ -353,13 +327,25 @@ def ensure_backups():
             msg = f"Could not create Backup folder: {e}"
             log.error(msg)
             return False, "error", msg
-        
-    for cid, bin_path in CONTAINER_PATHS.items():
+
+    manifest = load_backup_manifest(profile)
+    containers = manifest.setdefault("containers", {})
+    manifest["game"] = profile.game_id
+
+    for cid, bin_path in resolve_containers(profile).items():
         dest = os.path.join(BACKUP_FOLDER, bin_path)
-        metadata_size = METADATA_SIZE_MAP.get(cid)
+        metadata_size = container_metadata_size(bin_path)
 
         if metadata_size is None or not os.path.exists(bin_path):
             continue
+
+        record = containers.setdefault(str(cid), {})
+        record["path"] = bin_path
+        if "original_size" not in record and not os.path.exists(dest):
+            try:
+                record["original_size"] = os.path.getsize(bin_path)
+            except OSError:
+                pass
 
         try:
             result = write_toc_backup(bin_path, dest, metadata_size)
@@ -371,6 +357,8 @@ def ensure_backups():
             msg = f"Failed to back up TOC for {bin_path}: {e}"
             log.error(msg)
             backup_errors.append(msg)
+
+    save_backup_manifest(profile, manifest)
 
     if backup_errors:
         return False, "warning", "Some backups could not be created:\n\n" + "\n".join(backup_errors)
@@ -513,54 +501,32 @@ def resize_and_pad(image_path):
         img = ImageOps.pad(img, (500, 500), color=LILAC_RGB, centering=(0.5, 0.5))
         return img
 
-def parse_taildata(file_data: bytes):
-    if len(file_data) < TAILDATA_SIZE:
-        return None
-
-    cont_id, meta_offset, orig_base, orig_main, orig_decomp, is_comp, f_idx = TAILDATA_STRUCT.unpack(
-        file_data[-TAILDATA_SIZE:]
-    )
-    return {
-        "container_id": cont_id,
-        "meta_offset": meta_offset,
-        "orig_base": orig_base,
-        "orig_main": orig_main,
-        "orig_decomp": orig_decomp,
-        "is_comp": is_comp,
-        "file_id": f_idx,
-        "key": (cont_id, f_idx),
-    }
-
-def has_plausible_taildata(tail_info) -> bool:
-    if not tail_info:
-        return False
-    if not (0 <= tail_info["container_id"] <= 16):
-        return False
-    if tail_info["meta_offset"] < 0x10:
-        return False
-    return ((tail_info["meta_offset"] - 0x10) % 16) == 0
-
-def parse_valid_taildata(file_data: bytes):
-    tail_info = parse_taildata(file_data)
-    return tail_info if has_plausible_taildata(tail_info) else None
-
-def split_payload_and_taildata(file_data: bytes):
-    tail_info = parse_taildata(file_data)
-    if not has_plausible_taildata(tail_info):
-        return file_data, b"", None
-    return file_data[:-TAILDATA_SIZE], file_data[-TAILDATA_SIZE:], tail_info
-
 class BackgroundUnpacker:
     """
     Handles the unpacking logic in a background thread:
      Unpacks/Decompresses files
      Auto detects file extensions based on magic bytes
-     Appends 22 byte taildata for Mod Manager tracking
+     Records container metadata in the external taildata manifest
     """
-    def __init__(self, progress_callback, ui_notify=None):
+    def __init__(self, progress_callback, ui_notify=None, profile: GameProfile | None = None):
         self.progress_callback = progress_callback
         self.ui_notify = ui_notify
-        self.filename_ref = load_filename_ref()
+        self.profile = profile or get_active_profile()
+        self.filename_ref = load_profile_filename_ref(self.profile)
+        self.manifest = load_manifest(self.profile)
+
+    def save_manifest(self):
+        try:
+            return self.manifest.save()
+        except OSError as exc:
+            log.error("Could not write taildata manifest: %s", exc)
+            if self.ui_notify:
+                self.ui_notify(
+                    "error",
+                    "Taildata",
+                    f"Unpacked files were written but the taildata manifest could not be saved:\n{exc}",
+                )
+            return None
 
     def detect_ext(self, data: bytes) -> str:
         if not data:
@@ -621,29 +587,22 @@ class BackgroundUnpacker:
         if not os.path.exists(bin_path):
             raise FileNotFoundError(f"Could not find {bin_path}.")
         os.makedirs(folder_name, exist_ok=True)
-        
-        with open(bin_path, "rb") as f:
-            # Read Header
-            sig = f.read(4)
-            file_count = int.from_bytes(f.read(4), "little")
-            f.read(8)
-            
-            # Map the TOC
-            toc = []
-            for i in range(file_count):
-                entry_data = f.read(16)
-                base_val, _, main_size, decomp_size = struct.unpack("<IIII", entry_data)
-                
-                # Store original index
-                toc.append({
-                    'idx': i,
-                    'off': base_val << 8,
-                    'ms': main_size,
-                    'ds': decomp_size,
-                    'meta_offset': 0x10 + (i * 16),
-                    'base': base_val
-                })
 
+        alignment = self.profile.alignment
+        header = read_container_header(bin_path)
+        if header and header[2] and header[2] != alignment:
+            log.warning(
+                "%s declares alignment 0x%X but %s expects 0x%X; using the profile value",
+                bin_path, header[2], self.profile.game_id, alignment,
+            )
+
+        self.manifest.drop_container(container_id)
+        self.manifest.set_container(container_id, bin_path)
+
+        toc = read_toc(bin_path, alignment=alignment)
+        file_count = len(toc)
+
+        with open(bin_path, "rb") as f:
             f.seek(0, 2)
             total_size = f.tell()
 
@@ -660,12 +619,17 @@ class BackgroundUnpacker:
                     j += 1
 
                 if j < len(valid_toc):
-                    read_size = valid_toc[j]['off'] - entry['off']
+                    gap_size = valid_toc[j]['off'] - entry['off']
                 else:
-                    read_size = total_size - entry['off']
+                    gap_size = total_size - entry['off']
+
+                if self.profile.extract_size == "toc" and 0 < entry['ms'] <= gap_size:
+                    read_size = entry['ms']
+                else:
+                    read_size = gap_size
 
                 if read_size <= 0: read_size = entry['ms']
-                if read_size <= 0: continue 
+                if read_size <= 0: continue
 
                 f.seek(entry['off'])
                 raw_data = f.read(read_size)
@@ -683,18 +647,6 @@ class BackgroundUnpacker:
                     except Exception as e:
                         log.warning("ZL decompression failed for entry %06d: %s", entry['idx'], e)
 
-                # Append Taildata for the mod manager
-                is_comp = 1 if entry['ds'] > 0 else 0
-                taildata = TAILDATA_STRUCT.pack(
-                    container_id, 
-                    entry['meta_offset'], 
-                    entry['base'], 
-                    entry['ms'], 
-                    entry['ds'], 
-                    is_comp, 
-                    entry['idx']
-                )
-
                 output_path, filename = resolve_output_path(
                     folder_name,
                     self.filename_ref,
@@ -705,7 +657,23 @@ class BackgroundUnpacker:
 
                 with open(output_path, "wb") as out:
                     out.write(raw_data)
-                    out.write(taildata)
+
+                self.manifest.add(
+                    os.path.relpath(output_path, str(self.manifest.root)),
+                    {
+                        "container_id": container_id,
+                        "container_path": bin_path,
+                        "meta_offset": entry['meta_offset'],
+                        "orig_base": entry['base'],
+                        "orig_main": entry['ms'],
+                        "orig_decomp": entry['ds'],
+                        "is_comp": 1 if entry['ds'] > 0 else 0,
+                        "file_id": entry['idx'],
+                        "unpacked_size": len(raw_data),
+                        "stored_ext": orig_ext,
+                        "ext": ext,
+                    },
+                )
 
                 try:
                     unpack_nested_resource(output_path, blob=raw_data)
@@ -718,11 +686,93 @@ class BackgroundUnpacker:
             if self.progress_callback:
                 self.progress_callback(file_count, file_count, f"Completed: {folder_name}")
 
+        self.save_manifest()
+
 class ModManagerLogic:
-    def __init__(self):
-        self.containers = dict(CONTAINER_PATHS)
-        self.ledger_path = "applied_mods.txt"
-        self.installer_state_path = "installer_state.json"
+    def __init__(self, profile: GameProfile | None = None):
+        self.profile = profile or get_active_profile()
+        self.containers = resolve_containers(self.profile)
+        for cid in self.profile.containers:
+            self.containers.setdefault(cid, self.profile.candidates(cid)[0])
+        self.align_shift = self.profile.align_shift
+        self.alignment = self.profile.alignment
+        self.ledger_path = self.profile.ledger_filename
+        self.installer_state_path = self.profile.installer_state_filename
+        self.mods_dir = "Mods"
+
+    def mod_extensions(self):
+        return self.profile.mod_extensions
+
+    def align_up(self, handle):
+        """Move to the next container aligned boundary, padding as needed"""
+        handle.seek(0, 2)
+        pos = handle.tell()
+        padding = (self.alignment - (pos % self.alignment)) % self.alignment
+        if padding:
+            handle.write(b"\x00" * padding)
+        aligned = handle.tell()
+        if aligned % self.alignment:
+            raise IOError(
+                f"Couldn't align to 0x{self.alignment:X} in {handle.name}, "
+                f"landed on 0x{aligned:X}"
+            )
+        return aligned
+
+    def base_for_offset(self, offset, target_bin):
+        """Convert an aligned offset into the TOC's base value"""
+        base = offset >> self.align_shift
+        if base << self.align_shift != offset:
+            raise IOError(
+                f"{target_bin}: offset 0x{offset:X} is not a multiple of "
+                f"0x{self.alignment:X}, refusing to write a lossy TOC entry"
+            )
+        if base > 0xFFFFFFFF:
+            raise IOError(
+                f"{target_bin}: container has grown past what the TOC can address "
+                f"at 0x{self.alignment:X} alignment. Run Hard Reset to reclaim space."
+            )
+        return base
+
+    def verify_target(self, header, mod_name="This mod"):
+        """Check a package was built for the containers this install actually has"""
+        target = header.get("target") or {}
+        expected_shift = target.get("align_shift")
+
+        if expected_shift is not None and expected_shift != self.profile.align_shift:
+            return False, (
+                f"{mod_name} was built for {1 << expected_shift} byte alignment but "
+                f"{self.profile.label} uses {self.profile.alignment}.\n\n"
+                "The package targets a different game and can't be applied here."
+            )
+
+        for cid, (built_name, built_count) in (target.get("containers") or {}).items():
+            local_name = self.containers.get(cid)
+            if not local_name:
+                return False, f"{mod_name} targets unknown container id {cid}."
+
+            if os.path.basename(built_name).casefold() != os.path.basename(local_name).casefold():
+                return False, (
+                    f"{mod_name} was built against {built_name} but this install "
+                    f"has {local_name} for that slot.\n\n"
+                    "These are different regional versions of the game. Their file "
+                    "tables may not line up so applying this would corrupt the "
+                    "container. Use a mod built for your region & notify PythWare so KE can be updated."
+                )
+
+            if not built_count:
+                continue
+            header_info = read_container_header(local_name)
+            if not header_info or header_info[0] != LINKDATA_MAGIC:
+                continue
+            if header_info[1] != built_count:
+                return False, (
+                    f"{mod_name} was built against a {built_name} holding "
+                    f"{built_count} files but yours holds {header_info[1]}.\n\n"
+                    "The versions differ, so the stored file positions no longer "
+                    "point at the right entries."
+                )
+
+        return True, ""
 
     def load_installer_state(self):
         if not os.path.exists(self.installer_state_path):
@@ -731,7 +781,7 @@ class ModManagerLogic:
             with open(self.installer_state_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
-            log.warning("Installer state could not be read; resetting sidecar.", exc_info=True)
+            log.warning("Installer state could not be read, resetting sidecar.", exc_info=True)
             return {}
 
         return data if isinstance(data, dict) else {}
@@ -840,7 +890,7 @@ class ModManagerLogic:
                 g_name_len = int.from_bytes(mod_f.read(1), "little")
                 mod_f.seek(g_name_len, 1)
 
-                mod_f.read(1)  # selection logic byte
+                mod_f.read(1)
                 opt_count = int.from_bytes(mod_f.read(4), "little")
 
                 for o_idx in range(opt_count):
@@ -1073,8 +1123,9 @@ class ModManagerLogic:
                     length = read_int(size_bytes)
                     return read_exact(length).decode('utf-8', errors='ignore')
 
-                if sig == b'AOT2MF':
-                    is_release = read_int(1) # Catch global flag
+                if sig == self.profile.mod_signature:
+                    target = read_target_block(read_int, read_exact)
+                    is_release = read_int(1)
                     genre_byte = read_int(1)
                     file_count = read_int(4)
                     author = read_str(1)
@@ -1100,11 +1151,13 @@ class ModManagerLogic:
                         "images": images,
                         "audio": audio_data,
                         "file_count": file_count,
+                        "target": target,
                         "payload_offset": f.tell()
                     }
 
-                elif sig == b'AOT2MI':
-                    is_release = read_int(1) # Catch global flag
+                elif sig == self.profile.installer_signature:
+                    target = read_target_block(read_int, read_exact)
+                    is_release = read_int(1)
                     genre_byte = read_int(1)
                     name = read_str(1)
                     author = read_str(1)
@@ -1123,10 +1176,19 @@ class ModManagerLogic:
                         "meta": {"name": name, "author": author, "version": version, "description": description, "genre": REV_GENRE_MAP.get(genre_byte, "Unknown")},
                         "images": [],
                         "audio": audio_data,
+                        "target": target,
                         "payload_offset": f.tell()
                     }
+
+                for other in GAME_PROFILES.values():
+                    if sig in (other.mod_signature, other.installer_signature):
+                        log.warning(
+                            "%s is a %s package but %s is the active game",
+                            os.path.basename(mod_path), other.short_label, self.profile.short_label,
+                        )
+                        break
         except Exception:
-            log.warning("Could not parse mod package header: %s", mod_path, exc_info=True)
+            log.warning("Couldn't parse mod package header: %s", mod_path, exc_info=True)
 
         return None
 
@@ -1181,15 +1243,10 @@ class ModManagerLogic:
         actual_payload = file_data[:-TAILDATA_SIZE]
 
         with open(target_bin, "r+b") as bin_f:
-            bin_f.seek(0, 2)
-            pos = bin_f.tell()
-            padding = (256 - (pos % 256)) % 256
-            if padding: bin_f.write(b'\x00' * padding)
-            
-            new_start = bin_f.tell()
-            new_base = new_start >> 8
+            new_start = self.align_up(bin_f)
+            new_base = self.base_for_offset(new_start, target_bin)
             bin_f.write(actual_payload)
-            
+
             bin_f.seek(meta_offset)
             bin_f.write(struct.pack("<I", new_base))
             bin_f.seek(meta_offset + 8)
@@ -1199,7 +1256,6 @@ class ModManagerLogic:
     def apply_mod(self, mod_path):
         """
         Appends files to the BIN and updates the TOC
-        Also ensures 256 byte alignment for the new data
         """
         mod_name = os.path.basename(mod_path)
         header = self.get_mod_header(mod_path)
@@ -1207,6 +1263,11 @@ class ModManagerLogic:
             return False, "Invalid Mod Package"
         if header.get("type") != "standard":
             return False, "Installer packages must be launched through the installer wizard."
+
+        ok, reason = self.verify_target(header, mod_name)
+        if not ok:
+            log.warning("Refused to apply %s: %s", mod_name, reason.replace("\n", " "))
+            return False, reason
 
         with open(mod_path, "rb") as mod_f:
             mod_f.seek(header["payload_offset"])
@@ -1238,17 +1299,9 @@ class ModManagerLogic:
                         current_bin_handle = open(target_bin, "r+b")
                         current_bin_path = target_bin
 
-                    current_bin_handle.seek(0, 2)
-                    current_pos = current_bin_handle.tell()
-                    
-                    padding_needed = (256 - (current_pos % 256)) % 256
-                    if padding_needed > 0:
-                        current_bin_handle.write(b'\x00' * padding_needed)
-                    
-                    new_start_pos = current_bin_handle.tell()
-                    
-                    new_base_val = new_start_pos >> 8 
-                    
+                    new_start_pos = self.align_up(current_bin_handle)
+                    new_base_val = self.base_for_offset(new_start_pos, target_bin)
+
                     actual_payload = file_data[:-TAILDATA_SIZE]
                     current_bin_handle.write(actual_payload)
                     
@@ -1315,10 +1368,12 @@ class ModManagerLogic:
         """ Restores metadata blocks from original backups/truncates containers to remove all appended mod data"""
         missing_backups = []
         restore_errors = []
+        unknown_sizes = []
+        backup_manifest = load_backup_manifest(self.profile)
 
         for cid, name in self.containers.items():
             backup_path = os.path.join(BACKUP_FOLDER, name)
-            
+
             if not os.path.exists(name):
                 continue
 
@@ -1327,19 +1382,22 @@ class ModManagerLogic:
                 continue
 
             try:
-                size_to_read = METADATA_SIZE_MAP.get(cid)
-                target_truncate_size = FILE_SIZE_MAP.get(cid)
+                size_to_read = os.path.getsize(backup_path)
+                target_truncate_size = original_container_size(self.profile, cid, backup_manifest)
 
-                if size_to_read is None or target_truncate_size is None:
+                if not size_to_read:
                     continue
+                if target_truncate_size is None:
+                    unknown_sizes.append(name)
 
                 original_meta = read_metadata_block(backup_path, size_to_read)
 
                 with open(name, "r+b") as f:
                     f.seek(0)
                     f.write(original_meta)
-                    f.truncate(target_truncate_size)
-                        
+                    if target_truncate_size is not None:
+                        f.truncate(target_truncate_size)
+
             except Exception as e:
                 restore_errors.append(f"{name}: {str(e)}")
 
@@ -1351,7 +1409,7 @@ class ModManagerLogic:
             return False, "error", msg
 
         if missing_backups:
-            msg = "Could not restore the following files because backups were missing:\n\n" + "\n".join(missing_backups)
+            msg = "Couldn't restore the following files because backups were missing:\n\n" + "\n".join(missing_backups)
             log.warning("disable_all partial reset: %s", msg.replace("\n", " | "))
             return True, "warning", msg
 
@@ -1367,23 +1425,75 @@ class ModManagerLogic:
             except Exception:
                 pass
 
+        if unknown_sizes:
+            msg = (
+                "All mods cleared and the TOCs are back to vanilla.\n\n"
+                "These containers had no recorded original size, so the appended "
+                "mod bytes were left in place (harmless, just wasted disk):\n\n"
+                + "\n".join(unknown_sizes)
+            )
+            log.warning("disable_all couldn't truncate: %s", ", ".join(unknown_sizes))
+            return True, "warning", msg
+
         msg = "All mods cleared. Metadata and file sizes restored to vanilla."
         log.info(msg)
         return True, "info", msg
 
 class ModPacker:
-    def __init__(self):
-        pass
+    """Builds mod packages"""
+
+    def __init__(self, profile: GameProfile | None = None):
+        self.profile = profile or get_active_profile()
+        self.manifest = load_manifest(self.profile)
+        self.resolved_containers = resolve_containers(self.profile)
+
+    def reload_manifest(self):
+        self.manifest = load_manifest(self.profile)
+        self.resolved_containers = resolve_containers(self.profile)
+
+    def container_signature(self, container_id):
+        """filename/toc_entry_count for a container"""
+        name = self.resolved_containers.get(container_id)
+        if name:
+            header = read_container_header(name)
+            if header and header[0] == LINKDATA_MAGIC:
+                return name, header[1]
+        recorded = self.manifest.containers.get(str(container_id))
+        if isinstance(recorded, str) and recorded:
+            return recorded, 0
+        return (name or ""), 0
+
+    def build_target_block(self, records):
+        """Describe the containers this package writes into"""
+        containers = {}
+        for record in records:
+            cid = int(record["container_id"])
+            if cid in containers:
+                continue
+            name, count = self.container_signature(cid)
+            if name:
+                containers[cid] = (name, count)
+        return pack_target_block(self.profile.align_shift, containers)
+
+    def resolve_payload(self, file_path):
+        """Return (payload_with_record, error) for one file being packed"""
+        try:
+            file_data = Path(file_path).read_bytes()
+        except OSError as exc:
+            return None, f"Couldn't read {os.path.basename(file_path)}: {exc}"
+
+        record, payload = self.manifest.resolve(file_path, file_data)
+        if not record:
+            return None, None, (
+                f"No taildata for {os.path.basename(file_path)}.\n\n"
+                f"It must sit inside the folder unpacked for {self.profile.short_label} "
+                f"so it can be matched against {self.profile.taildata_filename}."
+            )
+        return payload + pack_record(record), record, None
 
     def validate_taildata(self, file_path):
-        if os.path.getsize(file_path) < TAILDATA_SIZE:
-            return False
-        try:
-            with open(file_path, "rb") as f:
-                f.seek(-TAILDATA_SIZE, 2)
-                return parse_valid_taildata(f.read(TAILDATA_SIZE)) is not None
-        except OSError:
-            return False
+        record, _payload = self.manifest.resolve(file_path)
+        return record is not None
 
     def write_string(self, f, text, size_bytes=1):
         b_text = text.encode('utf-8')
@@ -1434,11 +1544,20 @@ class ModPacker:
         except: return None
 
     def create_package(self, save_path, name, version, author, description, files, image_paths=[], audio_path=None, is_release=False, genre="Texture"):
-        """Standard .aot2m logic"""
+        """Standard mod package logic (.aot2m/.aot1m)"""
         try:
+            self.reload_manifest()
+
+            payloads = []
+            records = []
             for file_path in files:
-                if not self.validate_taildata(file_path):
-                    return False, f"File missing valid Katsuki taildata ({TAILDATA_SIZE} bytes): {os.path.basename(file_path)}"
+                payload, record, error = self.resolve_payload(file_path)
+                if error:
+                    return False, error
+                payloads.append(payload)
+                records.append(record)
+
+            target_block = self.build_target_block(records)
 
             image_blobs = []
             for img_p in image_paths[:5]:
@@ -1446,10 +1565,12 @@ class ModPacker:
                 if dat:
                     image_blobs.append(dat)
 
+            signature = self.profile.mod_signature
             with open(save_path, "wb") as f:
-                f.write(len(MOD_SIGNATURE).to_bytes(1, "little"))
-                f.write(MOD_SIGNATURE)
-                f.write((1 if is_release else 0).to_bytes(1, "little")) # Global flag
+                f.write(len(signature).to_bytes(1, "little"))
+                f.write(signature)
+                f.write(target_block)
+                f.write((1 if is_release else 0).to_bytes(1, "little"))
                 f.write(GENRE_MAP.get(genre, 1).to_bytes(1, "little"))
                 f.write(len(files).to_bytes(4, "little"))
                 
@@ -1470,33 +1591,45 @@ class ModPacker:
                         f.write(audio_dat)
                 else: f.write((0).to_bytes(1, "little"))
 
-                for file_path in files:
-                    size = os.path.getsize(file_path)
-                    f.write(size.to_bytes(4, "little"))
-                    with open(file_path, "rb") as src: f.write(src.read())
+                for payload in payloads:
+                    f.write(len(payload).to_bytes(4, "little"))
+                    f.write(payload)
             return True, "Created"
         except Exception as e: return False, str(e)
 
     def create_installer_package(self, save_path, name, version, author, description, audio_path, arch_data, tree_obj, is_release=False, genre="Texture"):
-        """Creates an .aot2mi installer with separated per-option resources"""
+        """Creates an installer package with per-option resources"""
         try:
+            self.reload_manifest()
+
             groups = list(tree_obj.get_children(""))
             option_total = 0
+            resolved: dict[str, list[bytes]] = {}
+            all_records: list[dict] = []
             for g_id in groups:
                 options = list(tree_obj.get_children(g_id))
                 option_total += len(options)
                 for o_id in options:
+                    option_payloads = []
                     for file_path in arch_data[o_id].get('files', []):
-                        if not self.validate_taildata(file_path):
-                            return False, f"File missing valid Katsuki taildata ({TAILDATA_SIZE} bytes): {os.path.basename(file_path)}"
+                        payload, record, error = self.resolve_payload(file_path)
+                        if error:
+                            return False, error
+                        option_payloads.append(payload)
+                        all_records.append(record)
+                    resolved[o_id] = option_payloads
 
             if not groups or option_total <= 0:
                 return False, "Installer packages need at least one group and one option."
 
+            target_block = self.build_target_block(all_records)
+
+            signature = self.profile.installer_signature
             with open(save_path, "wb") as f:
-                f.write(len(INSTALLER_SIGNATURE).to_bytes(1, "little"))
-                f.write(INSTALLER_SIGNATURE)
-                f.write((1 if is_release else 0).to_bytes(1, "little")) # Globall flag
+                f.write(len(signature).to_bytes(1, "little"))
+                f.write(signature)
+                f.write(target_block)
+                f.write((1 if is_release else 0).to_bytes(1, "little"))
                 f.write(GENRE_MAP.get(genre, 1).to_bytes(1, "little"))
                 self.write_string(f, name, 1)
                 self.write_string(f, author, 1)
@@ -1533,11 +1666,11 @@ class ModPacker:
                             f.write(img_dat)
                         else: f.write((0).to_bytes(4, "little"))
 
-                        f.write(len(o_data['files']).to_bytes(4, "little"))
-                        for file_path in o_data['files']:
-                            size = os.path.getsize(file_path)
-                            f.write(size.to_bytes(4, "little"))
-                            with open(file_path, "rb") as src: f.write(src.read())
+                        option_payloads = resolved.get(o_id, [])
+                        f.write(len(option_payloads).to_bytes(4, "little"))
+                        for payload in option_payloads:
+                            f.write(len(payload).to_bytes(4, "little"))
+                            f.write(payload)
             return True, "Installer Created"
         except Exception as e: return False, str(e)
 

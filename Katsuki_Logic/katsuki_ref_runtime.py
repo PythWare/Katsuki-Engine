@@ -4,6 +4,20 @@ from pathlib import Path
 DEFAULT_REF_NAME = "filename.ref"
 INVALID_FILENAME_CHARS = '<>:"|?*'
 
+REF_DIR = Path(__file__).resolve().parent
+
+
+def ref_path(profile) -> Path:
+    """Where this game's filename ref lives, shipped or regenerated"""
+    return REF_DIR / profile.ref_filename
+
+
+def load_profile_filename_ref(profile, root: str | os.PathLike = ".") -> dict[tuple[int, int], str]:
+    candidate = ref_path(profile)
+    if candidate.exists():
+        return load_filename_ref(candidate)
+    return {}
+
 
 def load_filename_ref(ref_path: str | os.PathLike = DEFAULT_REF_NAME) -> dict[tuple[int, int], str]:
     refs: dict[tuple[int, int], str] = {}

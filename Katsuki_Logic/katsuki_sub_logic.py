@@ -316,7 +316,6 @@ def should_preserve_split_wrapper_members(members: list[tuple[bytes, str]]) -> b
 
     return True
 
-
 def decompress_split_zlib_for_unpack(raw: bytes) -> tuple[bytes, str]:
     if looks_like_split_zlib_pairtable_wrapper(raw):
         members = decompress_pairtable_split_zlib_members(raw)
@@ -2273,7 +2272,7 @@ def rebuild_kshl_blob_from_folder(folder_path: str, original_raw: bytes) -> byte
     new_payload_size = len(new_payload)
     new_size = payload_start + new_payload_size
 
-    # Main known KSHL fields.
+    # Main known KSHL fields
     header[0x08:0x0C] = new_size.to_bytes(4, "little", signed=False)
     header[0xB0:0xB4] = payload_start.to_bytes(4, "little", signed=False)
     header[0xB4:0xB8] = new_payload_size.to_bytes(4, "little", signed=False)
@@ -2303,13 +2302,7 @@ def rebuild_kshl_from_folder(
     with open(original_kshl_path, "rb") as handle:
         original_blob = handle.read()
 
-    original_raw, taildata_bytes = split_optional_taildata(
-        original_blob,
-        looks_like_kshl_blob,
-    )
-
-    rebuilt_raw = rebuild_kshl_blob_from_folder(folder_path, original_raw)
-    rebuilt_blob = rebuilt_raw + taildata_bytes
+    rebuilt_blob = rebuild_kshl_blob_from_folder(folder_path, original_blob)
 
     output_path = write_rebuilt_resource_output(original_kshl_path, rebuilt_blob, output_path)
     return output_path, f"Rebuilt KSHL with {len(list_folder_payload_files(folder_path))} shader payload(s)."
@@ -2520,50 +2513,6 @@ def unpack_nested_resource(path: str, blob: bytes | None = None) -> bool:
         return True
     return unpack_embedded_mdlk_blob(blob, out_dir)
 
-TAILDATA_STRUCT = struct.Struct("<BIIIIBI")
-TAILDATA_SIZE = TAILDATA_STRUCT.size
-
-def parse_taildata(file_data: bytes):
-    if len(file_data) < TAILDATA_SIZE:
-        return None
-
-    cont_id, meta_offset, orig_base, orig_main, orig_decomp, is_comp, f_idx = TAILDATA_STRUCT.unpack(
-        file_data[-TAILDATA_SIZE:]
-    )
-    return {
-        "container_id": cont_id,
-        "meta_offset": meta_offset,
-        "orig_base": orig_base,
-        "orig_main": orig_main,
-        "orig_decomp": orig_decomp,
-        "is_comp": is_comp,
-        "file_id": f_idx,
-        "key": (cont_id, f_idx),
-    }
-
-def has_plausible_taildata(tail_info) -> bool:
-    if not tail_info:
-        return False
-    if not (0 <= tail_info["container_id"] <= 16):
-        return False
-    if tail_info["meta_offset"] < 0x10:
-        return False
-    if tail_info["is_comp"] not in (0, 1):
-        return False
-    return ((tail_info["meta_offset"] - 0x10) % 16) == 0
-
-def split_payload_and_taildata(file_data: bytes):
-    tail_info = parse_taildata(file_data)
-    if not has_plausible_taildata(tail_info):
-        return file_data, b"", None
-    return file_data[:-TAILDATA_SIZE], file_data[-TAILDATA_SIZE:], tail_info
-
-def split_optional_taildata(blob: bytes, detector) -> tuple[bytes, bytes]:
-    raw, taildata, _tail_info = split_payload_and_taildata(blob)
-    if taildata and detector(raw):
-        return raw, taildata
-    return blob, b""
-
 def list_folder_payload_files(folder_path: str) -> list[str]:
     folder_files = [
         os.path.join(folder_path, name)
@@ -2709,13 +2658,7 @@ def rebuild_mdlk_from_folder(
     with open(original_mdlk_path, "rb") as handle:
         original_blob = handle.read()
 
-    original_raw, taildata_bytes = split_optional_taildata(
-        original_blob,
-        looks_like_mdlk_blob,
-    )
-
-    rebuilt_raw = rebuild_mdlk_blob_from_folder(folder_path, original_raw)
-    rebuilt_blob = rebuilt_raw + taildata_bytes
+    rebuilt_blob = rebuild_mdlk_blob_from_folder(folder_path, original_blob)
 
     output_path = write_rebuilt_resource_output(original_mdlk_path, rebuilt_blob, output_path)
     return output_path, f"Rebuilt MDLK with {len(list_folder_payload_files(folder_path))} payload(s)."
@@ -2760,20 +2703,14 @@ def rebuild_embedded_mdlk_from_folder(
     output_path: str | None = None,
 ):
     if not os.path.isdir(folder_path):
-        raise ValueError("Selected embedded MDLK folder does not exist.")
+        raise ValueError("Selected embedded MDLK folder doesn't exist.")
     if not os.path.isfile(original_resource_path):
         raise ValueError("Selected original embedded MDLK wrapper does not exist.")
 
     with open(original_resource_path, "rb") as handle:
         original_blob = handle.read()
 
-    original_raw, taildata_bytes = split_optional_taildata(
-        original_blob,
-        looks_like_embedded_mdlk_blob,
-    )
-
-    rebuilt_raw = rebuild_embedded_mdlk_blob_from_folder(folder_path, original_raw)
-    rebuilt_blob = rebuilt_raw + taildata_bytes
+    rebuilt_blob = rebuild_embedded_mdlk_blob_from_folder(folder_path, original_blob)
 
     output_path = write_rebuilt_resource_output(original_resource_path, rebuilt_blob, output_path)
     return output_path, f"Rebuilt embedded MDLK wrapper with {len(list_folder_payload_files(folder_path))} payload(s)."
@@ -2987,31 +2924,25 @@ def write_rebuilt_resource_output(original_resource_path: str, rebuilt_blob: byt
 
 def rebuild_classic_split_zlib_from_folder(folder_path: str, original_resource_path: str, output_path: str | None = None):
     if not os.path.isdir(folder_path):
-        raise ValueError("Selected split-zlib folder does not exist.")
+        raise ValueError("Selected split-zlib folder doesn't exist.")
     if not os.path.isfile(original_resource_path):
-        raise ValueError("Selected original split-zlib file does not exist.")
+        raise ValueError("Selected original split-zlib file doesn't exist.")
 
     with open(original_resource_path, "rb") as handle:
         original_blob = handle.read()
-    original_raw, taildata_bytes = split_optional_taildata(original_blob, looks_like_classic_split_zlib)
-
-    rebuilt_raw = rebuild_classic_split_zlib_raw_from_folder(folder_path, original_raw)
-    rebuilt_blob = rebuilt_raw + taildata_bytes
+    rebuilt_blob = rebuild_classic_split_zlib_raw_from_folder(folder_path, original_blob)
     output_path = write_rebuilt_resource_output(original_resource_path, rebuilt_blob, output_path)
     return output_path, "Rebuilt classic split-zlib resource."
 
 def rebuild_split_zlib_wrapper_from_folder(folder_path: str, original_resource_path: str, output_path: str | None = None):
     if not os.path.isdir(folder_path):
-        raise ValueError("Selected split-zlib wrapper folder does not exist.")
+        raise ValueError("Selected split-zlib wrapper folder doesn't exist.")
     if not os.path.isfile(original_resource_path):
-        raise ValueError("Selected original split-zlib wrapper file does not exist.")
+        raise ValueError("Selected original split-zlib wrapper file doesn't exist.")
 
     with open(original_resource_path, "rb") as handle:
         original_blob = handle.read()
-    original_raw, taildata_bytes = split_optional_taildata(original_blob, looks_like_split_zlib_pairtable_wrapper)
-
-    rebuilt_raw = rebuild_split_zlib_wrapper_raw_from_folder(folder_path, original_raw)
-    rebuilt_blob = rebuilt_raw + taildata_bytes
+    rebuilt_blob = rebuild_split_zlib_wrapper_raw_from_folder(folder_path, original_blob)
     output_path = write_rebuilt_resource_output(original_resource_path, rebuilt_blob, output_path)
     return output_path, f"Rebuilt split-zlib wrapper with {len(list_folder_payload_files(folder_path))} member(s)."
 
@@ -3027,13 +2958,7 @@ def rebuild_universal_subcontainer_file_from_folder(
 
     with open(original_subcontainer_path, "rb") as handle:
         original_blob = handle.read()
-    original_raw, taildata_bytes = split_optional_taildata(
-        original_blob,
-        lambda raw: read_universal_subcontainer_layout(raw) is not None,
-    )
-
-    rebuilt_raw = rebuild_universal_subcontainer_raw_from_folder(folder_path, original_raw)
-    rebuilt_blob = rebuilt_raw + taildata_bytes
+    rebuilt_blob = rebuild_universal_subcontainer_raw_from_folder(folder_path, original_blob)
     output_path = write_rebuilt_resource_output(original_subcontainer_path, rebuilt_blob, output_path)
     return output_path, f"Rebuilt subcontainer with {len(list_folder_payload_files(folder_path))} payload(s)."
 
@@ -3108,31 +3033,12 @@ def natural_kvs_sort_key(name: str):
         return (0, num, stem.lower(), name.lower())
     return (1, stem.lower(), name.lower())
 
-def read_taildata(base_file_path: str | None, status=None) -> bytes | None:
-    if not base_file_path:
-        return None
-    try:
-        with open(base_file_path, "rb") as handle:
-            blob = handle.read()
-    except OSError as e:
-        if status is not None:
-            status(f"Could not open base file for taildata: {e}", "red")
-        return None
-
-    _raw, taildata, _tail_info = split_payload_and_taildata(blob)
-    if taildata:
-        return taildata
-    if status is not None:
-        status(f"Base file does not have Katsuki taildata: {base_file_path}", "red")
-    return None
-
 def repack_kvs_folder(
     folder_path: str,
     kvs_files: list[str],
     out_path: str,
     status,
     progress,
-    taildata: bytes | None = None,
 ) -> str | None:
     kvs_files = sorted(kvs_files, key=natural_kvs_sort_key)
     total = len(kvs_files)
@@ -3170,9 +3076,6 @@ def repack_kvs_folder(
 
                 if progress is not None:
                     progress(idx + 1, total, f"KVS repack: {idx + 1}/{total}")
-
-            if taildata and len(taildata) == TAILDATA_SIZE:
-                out_f.write(taildata)
 
         status(f"KVS repack complete: {out_path}", "green")
         return out_path
@@ -3219,7 +3122,6 @@ def repack_from_folder(
             out_path,
             status,
             progress,
-            taildata=read_taildata(base_file_path, status) if base_file_path else None,
         )
 
     if not base_file_path:
@@ -3354,23 +3256,21 @@ def rebuild_subcontainer_from_folder(
 
     with open(original_subcontainer_path, "rb") as handle:
         original_blob = handle.read()
-    original_raw, taildata = split_optional_taildata(original_blob, looks_like_supported_raw)
 
-    if looks_like_mdlk_blob(original_raw):
+    if looks_like_mdlk_blob(original_blob):
         return rebuild_mdlk_from_folder(folder_path, original_subcontainer_path, output_path)
-    if looks_like_kshl_blob(original_raw):
+    if looks_like_kshl_blob(original_blob):
         return rebuild_kshl_from_folder(folder_path, original_subcontainer_path, output_path)
-    if looks_like_split_zlib_pairtable_wrapper(original_raw):
+    if looks_like_split_zlib_pairtable_wrapper(original_blob):
         return rebuild_split_zlib_wrapper_from_folder(folder_path, original_subcontainer_path, output_path)
-    if looks_like_classic_split_zlib(original_raw):
+    if looks_like_classic_split_zlib(original_blob):
         return rebuild_classic_split_zlib_from_folder(folder_path, original_subcontainer_path, output_path)
-    if looks_like_embedded_mdlk_blob(original_raw):
+    if looks_like_embedded_mdlk_blob(original_blob):
         return rebuild_embedded_mdlk_from_folder(folder_path, original_subcontainer_path, output_path)
-    if original_raw[:4] == b"KOVS":
-        rebuilt_raw = rebuild_kvs_blob_from_folder(folder_path)
+    if original_blob[:4] == b"KOVS":
         output_path = write_rebuilt_resource_output(
             original_subcontainer_path,
-            rebuilt_raw + taildata,
+            rebuild_kvs_blob_from_folder(folder_path),
             output_path,
         )
         return output_path, f"Rebuilt KVS with {len(list_folder_payload_files(folder_path))} chunk(s)."

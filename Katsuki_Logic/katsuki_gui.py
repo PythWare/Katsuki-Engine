@@ -6,8 +6,15 @@ from PIL import ImageTk, Image
 from tkinter import ttk, filedialog, messagebox
 from typing import Dict, List, Optional, Tuple
 
-from .katsuki_gauntlets import BLAST_THEME, LILAC, setup_lilac_styles, apply_lilac_to_root, BackgroundUnpacker, ModPacker, ModManagerLogic, log, WinMMAudioPlayer, rebuild_subcontainer_from_folder
+from .katsuki_gauntlets import BLAST_THEME, LILAC, setup_lilac_styles, apply_lilac_to_root, BackgroundUnpacker, ModPacker, ModManagerLogic, log, WinMMAudioPlayer, rebuild_subcontainer_from_folder, ensure_backups
 from .katsuki_blast_manager import BlastChamberWindow
+from .katsuki_profiles import (
+    GAME_PROFILES,
+    get_active_profile,
+    resolve_containers,
+    set_active_profile,
+)
+from .katsuki_filename_ref import ensure_filename_ref
 
 """
 This script handles the GUI logic of Katsuki Engine, calling functions as needed from other scripts
@@ -283,12 +290,11 @@ class BlastModRecord:
 class ModManagerWindow(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
-        self.title("Katsuki Mod Manager")
-        self.geometry("1150x950")
-        
-        apply_lilac_to_root(self)
-        
         self.logic = ModManagerLogic()
+        self.title(f"Katsuki Mod Manager, {self.logic.profile.short_label}")
+        self.geometry("1150x950")
+
+        apply_lilac_to_root(self)
         self._audio_player = WinMMAudioPlayer(log=log)
         self.current_mod_data = None
         self.music_enabled = tk.BooleanVar(value=True)
@@ -532,13 +538,18 @@ class ModManagerWindow(tk.Toplevel):
             os.makedirs("Mods")
 
         applied_mods = self.logic.get_applied_mods()
-        mod_files = [f for f in os.listdir("Mods") if f.endswith(".aot2mi") or f.endswith(".aot2m")]
+        extensions = self.logic.mod_extensions()
+        mod_files = [f for f in os.listdir("Mods") if f.lower().endswith(extensions)]
 
         search_query = self.search_var.get().lower() if hasattr(self, 'search_var') else ""
         selected_genre = self.active_genre.get() if hasattr(self, 'active_genre') else "All"
 
         if not mod_files:
-            tk.Label(self.scrollable_frame, text="No .aot2m/aot2mi packages found", bg=LILAC, fg="gray").pack(pady=20)
+            tk.Label(
+                self.scrollable_frame,
+                text=f"No {'/'.join(extensions)} packages found",
+                bg=LILAC, fg="gray"
+            ).pack(pady=20)
             return
 
         visible_count = 0
@@ -581,7 +592,7 @@ class ModManagerWindow(tk.Toplevel):
             tk.Label(self.scrollable_frame, text="No mods match the current filters.", bg=LILAC, fg="#5e2f5e").pack(pady=20)
 
     def on_mod_select(self, mod_path):
-        self.stop_audio() # Kill previous music
+        self.stop_audio()
         if self.selected_card and self.selected_card.winfo_exists():
             self.selected_card.set_selected(False)
         else:
@@ -633,7 +644,7 @@ class ModManagerWindow(tk.Toplevel):
         self.update_image_display()
 
     def stop_audio(self):
-        """Stops any looping audio started by play_audio_loop()."""
+        """Stops any looping audio started by play_audio_loop()"""
         self._audio_player.stop()
 
     def destroy(self):
@@ -792,7 +803,10 @@ class InstallerWizard(tk.Toplevel):
         try:
             header = self.logic.get_mod_header(self.mod_path)
             if not header or header.get("type") != "installer":
-                messagebox.showerror("Wizard Error", "Selected mod is not an installer (.aot2mi).")
+                messagebox.showerror(
+                    "Wizard Error",
+                    f"Selected mod is not an installer ({get_active_profile().installer_ext}).",
+                )
                 return
 
             with open(self.mod_path, "rb") as f:
@@ -890,7 +904,7 @@ class InstallerWizard(tk.Toplevel):
         if details['img']:
             try:
                 img = Image.open(BytesIO(details['img']))
-                img = img.resize((300, 300)) # Fit to Wizard Canvas
+                img = img.resize((300, 300))
                 self.tk_prev = ImageTk.PhotoImage(img)
                 self.prev_canvas.delete("all")
                 self.prev_canvas.create_image(0, 0, anchor="nw", image=self.tk_prev)
@@ -905,6 +919,11 @@ class InstallerWizard(tk.Toplevel):
             header = self.logic.get_mod_header(self.mod_path)
             if not header or header.get("type") != "installer":
                 raise ValueError("Not an installer package")
+
+            ok, reason = self.logic.verify_target(header, os.path.basename(self.mod_path))
+            if not ok:
+                messagebox.showerror("Wrong Version", reason)
+                return
 
             with open(self.mod_path, "rb") as f:
                 f.seek(header["payload_offset"])
@@ -995,8 +1014,8 @@ class InstallerWizard(tk.Toplevel):
 class ModCreatorWindow(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
-        self.title("Katsuki Mod Creator")
-        self.geometry("1200x900") 
+        self.title(f"Katsuki Mod Creator, {get_active_profile().short_label}")
+        self.geometry("1300x900")
         
         apply_lilac_to_root(self)
         
@@ -1009,8 +1028,8 @@ class ModCreatorWindow(tk.Toplevel):
         self.current_arch_item = None
         self.arch_preview_ref = None
         self.arch_audio_file = None
-        self.build_mode_var = tk.BooleanVar(value=False) # False = Debug, True = Release
-        self.mod_genre = tk.StringVar(value="Texture") # Default genre
+        self.build_mode_var = tk.BooleanVar(value=False)
+        self.mod_genre = tk.StringVar(value="Texture")
 
         self.tabs = ttk.Notebook(self)
         self.tabs.pack(fill="both", expand=True, padx=5, pady=5)
@@ -1218,7 +1237,7 @@ class ModCreatorWindow(tk.Toplevel):
         self.ent_grp_name.bind("<KeyRelease>", self.arch_update_name)
 
         tk.Label(self.frm_grp, text="Selection Type:", font=("Segoe UI", 9, "bold"), bg="#D191FB", anchor="w").pack(fill="x")
-        self.var_grp_type = tk.StringVar(value="Single Select") # Updated default
+        self.var_grp_type = tk.StringVar(value="Single Select")
         tk.Radiobutton(self.frm_grp, text="Single Select", variable=self.var_grp_type, value="Single Select", bg="#D191FB", command=self.arch_update_data).pack(anchor="w")
         tk.Radiobutton(self.frm_grp, text="Multi Select", variable=self.var_grp_type, value="Multi Select", bg="#D191FB", command=self.arch_update_data).pack(anchor="w")
         
@@ -1249,7 +1268,7 @@ class ModCreatorWindow(tk.Toplevel):
 
         ttk.Button(self.frm_opt, text="Set Image", command=self.arch_set_image).pack(anchor="w")
 
-        self.btn_arch_build = tk.Button(right_frame, text="Generate Installer (.aot2mi)", font=("Impact", 14), bg="#32CD32", fg="white", command=self.create_installer_package)
+        self.btn_arch_build = tk.Button(right_frame, text=f"Generate Installer ({get_active_profile().installer_ext})", font=("Impact", 14), bg="#32CD32", fg="white", command=self.create_installer_package)
         self.btn_arch_build.pack(side="bottom", fill="x", pady=10)
 
     def add_files(self):
@@ -1324,9 +1343,14 @@ class ModCreatorWindow(tk.Toplevel):
             messagebox.showwarning("Incomplete", "Mod Name, Author, and Files required.")
             return
 
-        save_path = filedialog.asksaveasfilename(defaultextension=".aot2m", filetypes=[("AOT2 Mod", "*.aot2m")], initialfile=f"{name}.aot2m")
+        profile = get_active_profile()
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=profile.mod_ext,
+            filetypes=[(f"{profile.short_label} Mod", f"*{profile.mod_ext}")],
+            initialfile=f"{name}{profile.mod_ext}",
+        )
         if save_path:
-            packer = ModPacker()
+            packer = ModPacker(profile)
             success, msg = packer.create_package(
                 save_path, name, ver, auth, desc, 
                 self.files_to_pack, self.images_to_pack, self.audio_to_pack, 
@@ -1340,7 +1364,7 @@ class ModCreatorWindow(tk.Toplevel):
 
     def arch_add_group(self):
         item_id = self.tree.insert("", "end", text="New Group", open=True)
-        self.arch_data[item_id] = {"type": "group", "name": "New Group", "sel_type": "Single Select"} # Updated
+        self.arch_data[item_id] = {"type": "group", "name": "New Group", "sel_type": "Single Select"}
         self.tree.selection_set(item_id)
 
     def arch_add_option(self):
@@ -1486,9 +1510,14 @@ class ModCreatorWindow(tk.Toplevel):
             messagebox.showwarning("Structure Empty", "Add at least one Group and Option.")
             return
 
-        save_path = filedialog.asksaveasfilename(defaultextension=".aot2mi", filetypes=[("AOT2 Installer", "*.aot2mi")], initialfile=f"{name}.aot2mi")
+        profile = get_active_profile()
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=profile.installer_ext,
+            filetypes=[(f"{profile.short_label} Installer", f"*{profile.installer_ext}")],
+            initialfile=f"{name}{profile.installer_ext}",
+        )
         if save_path:
-            packer = ModPacker()
+            packer = ModPacker(profile)
             success, msg = packer.create_installer_package(
                 save_path, name, version, author, desc,
                 self.arch_audio_file, self.arch_data, self.tree,
@@ -1503,7 +1532,8 @@ class ModCreatorWindow(tk.Toplevel):
 class CoreTools():
     def __init__(self, root):
         self.root = root
-        self.root.title("Katsuki Engine, Attack On Titan 2 Toolkit")
+        self.profile = get_active_profile()
+        self.root.title(f"Katsuki Engine, {self.profile.label} Toolkit")
         self.mod_creator_window = None
         self.mod_manager_window = None
         self.root.geometry("800x900")
@@ -1514,10 +1544,12 @@ class CoreTools():
 
         self.progress = None
         self.active_task = None
-        
+        self.game_buttons = {}
+
         self.gui_setup()
         self.init_progress()
         apply_blast_theme_tree(self.root)
+        self.refresh_game_ui()
 
     def ui_notify(self, kind, title, message):
         """Thread safe, can be called from worker threads"""
@@ -1546,13 +1578,16 @@ class CoreTools():
             style="Lilac.TLabel"
         ).pack()
         
-        ttk.Label(
-            header_frame, 
-            text="AOT2 Modding Toolkit", 
-            font=("Segoe UI", 10, "bold"), 
-            foreground=TEXT_MUTED, 
+        self.subtitle_label = ttk.Label(
+            header_frame,
+            text=f"{self.profile.short_label} Modding Toolkit",
+            font=("Segoe UI", 10, "bold"),
+            foreground=TEXT_MUTED,
             style="Lilac.TLabel"
-        ).pack()
+        )
+        self.subtitle_label.pack()
+
+        self.build_game_switch(self.bg)
 
         card_container = tk.Frame(self.bg, bg=LILAC)
         card_container.pack(expand=False, side="top", anchor="n")
@@ -1564,25 +1599,21 @@ class CoreTools():
             command=self.open_mod_creator_window,
             color=GREEN
         )
-        self.btn_creator.pack(pady=12)
-
         self.btn_manager = HoverCard(
-            card_container, 
-            title="Mod Manager", 
-            subtitle="Apply, toggle, or disable active mods", 
+            card_container,
+            title="Mod Manager",
+            subtitle="Apply, toggle, or disable active mods",
             command=self.open_mod_manager_window,
             color=ACCENT_BRIGHT
         )
-        self.btn_manager.pack(pady=12)
 
         self.btn_unpack = HoverCard(
-            card_container, 
-            title="Unpack Bins", 
-            subtitle="Extract BIN files", 
+            card_container,
+            title="Unpack Bins",
+            subtitle="Extract BIN files",
             command=self.start_unpacking,
             color=METAL
         )
-        self.btn_unpack.pack(pady=12)
 
         self.btn_rebuild_sub = HoverCard(
             card_container,
@@ -1591,7 +1622,11 @@ class CoreTools():
             command=self.start_subcontainer_rebuild,
             color=ACCENT_DEEP
         )
-        self.btn_rebuild_sub.pack(pady=12)
+
+        for index, card in enumerate(
+            (self.btn_creator, self.btn_manager, self.btn_unpack, self.btn_rebuild_sub)
+        ):
+            card.grid(row=index // 2, column=index % 2, padx=8, pady=10)
 
         self.status_label = ttk.Label(
             self.bg,
@@ -1601,6 +1636,92 @@ class CoreTools():
         )
         self.status_label.pack(side="bottom", pady=(0, 80))
 
+    def build_game_switch(self, parent):
+        """Segmented control that picks which game the toolkit is pointed at"""
+        wrap = tk.Frame(parent, bg=LILAC)
+        wrap.pack(pady=(0, 18))
+
+        tk.Label(
+            wrap, text="GAME", bg=LILAC, fg=TEXT_MUTED,
+            font=("Segoe UI", 8, "bold")
+        ).pack(pady=(0, 6))
+
+        row = tk.Frame(wrap, bg=LILAC)
+        row.pack()
+
+        for game_id, profile in sorted(GAME_PROFILES.items()):
+            button = tk.Button(
+                row,
+                text=profile.short_label,
+                font=("Impact", 14),
+                width=10,
+                relief="flat",
+                cursor="hand2",
+                command=lambda gid=game_id: self.switch_game(gid),
+            )
+            button.pack(side="left", padx=6)
+            self.game_buttons[game_id] = button
+
+        self.game_detail = tk.Label(
+            wrap, text="", bg=LILAC, fg=TEXT_MUTED, font=("Segoe UI", 8)
+        )
+        self.game_detail.pack(pady=(8, 0))
+
+    def refresh_game_ui(self):
+        """Repaint anything that names the active game"""
+        for game_id, button in self.game_buttons.items():
+            active = game_id == self.profile.game_id
+            button.config(
+                bg=ACCENT_BRIGHT if active else PANEL_ALT,
+                fg=TEXT_DARK if active else TEXT_MUTED,
+                activebackground=ACCENT if active else PANEL_SOFT,
+                activeforeground=TEXT_DARK if active else TEXT,
+            )
+
+        self.root.title(f"Katsuki Engine, {self.profile.label} Toolkit")
+        self.subtitle_label.config(text=f"{self.profile.short_label} Modding Toolkit")
+        self.btn_creator.set_subtitle(
+            f"Pack files into {self.profile.mod_ext}/{self.profile.installer_ext} mods"
+        )
+
+        found = resolve_containers(self.profile)
+        total = len(self.profile.containers)
+        if found:
+            self.game_detail.config(
+                text=f"{len(found)}/{total} containers found in this folder",
+                fg=GREEN_BRIGHT,
+            )
+        else:
+            self.game_detail.config(
+                text=f"No {self.profile.short_label} containers found here",
+                fg=WARNING,
+            )
+
+    def switch_game(self, game_id):
+        """Point the whole toolkit at a different game"""
+        if game_id == self.profile.game_id:
+            return
+        if self.active_task:
+            self.set_status(f"{self.active_task} is running, can't switch games", "orange")
+            return
+
+        for attr in ("mod_manager_window", "mod_creator_window"):
+            window = getattr(self, attr, None)
+            if window is not None and window.winfo_exists():
+                window.destroy()
+            setattr(self, attr, None)
+
+        self.profile = set_active_profile(game_id)
+        log.info("Switched active game to %s", self.profile.label)
+        self.refresh_game_ui()
+
+        ok, level, message = ensure_backups(self.profile)
+        if message:
+            self.ui_notify(level if level in ("info", "warning", "error") else "warning",
+                           "Backup Check", message)
+
+        self.set_status(f"Now modding {self.profile.label}", GREEN_BRIGHT)
+
     def open_mod_manager_window(self):
         """
         Singleton Pattern, only opens if not already open
@@ -1608,7 +1729,7 @@ class CoreTools():
         if self.mod_manager_window is None or not self.mod_manager_window.winfo_exists():
             self.mod_manager_window = BlastChamberWindow(self.root)
         else:
-            self.mod_manager_window.lift() # Bring to front
+            self.mod_manager_window.lift()
             self.mod_manager_window.focus_force()
 
     def open_mod_creator_window(self):
@@ -1618,7 +1739,7 @@ class CoreTools():
         if self.mod_creator_window is None or not self.mod_creator_window.winfo_exists():
             self.mod_creator_window = ModCreatorWindow(self.root)
         else:
-            self.mod_creator_window.lift() # Bring to front
+            self.mod_creator_window.lift()
             self.mod_creator_window.focus_force()
 
     def init_progress(self):
@@ -1712,39 +1833,62 @@ class CoreTools():
 
     def run_unpack_task(self):
         """The actual work loop running in the thread, containers will be unpacked"""
+        profile = self.profile
+
+        try:
+            self.set_status("Checking filename reference", "blue")
+            ref_path, ref_message = ensure_filename_ref(profile)
+            if ref_path is None:
+                log.warning("No filename ref for %s: %s", profile.game_id, ref_message)
+                self.ui_notify("warning", "Filenames Unavailable", ref_message)
+            elif ref_message:
+                log.info(ref_message)
+                self.set_status(ref_message, GREEN_BRIGHT)
+        except Exception:
+            log.exception("Filename ref check failed")
+
         unpacker = BackgroundUnpacker(
             progress_callback=self.set_progress,
-            ui_notify=self.ui_notify
+            ui_notify=self.ui_notify,
+            profile=profile,
         )
-        
-        try:
-            unpack_jobs = [
-                ("LINKDATA_A.BIN", "LINK_A", 0),
-                ("LINKDATA_B.BIN", "LINK_B", 1),
-                ("LINKDATA_C.BIN", "LINK_C", 2),
-                ("LINKDATA_D.BIN", "LINK_D", 3),
-                ("LINKDATA_DEBUG.BIN", "LINK_DEBUG", 4),
-                ("LINKDATA_DLC.BIN", "LINK_DLC", 5),
-                ("LINKDATA_PLATFORM_DX11.BIN", "LINK_PLATFORM_DX11", 6),
-                ("LINKDATA_PLATFORM_EDEN_DX11.BIN", "LINK_PLATFORM_EDEN", 7),
-                ("REGION/LINKDATA_REGION_JP.BIN", "REGION_JP", 8),
-                ("REGION/LINKDATA_REGION_AS.BIN", "REGION_AS", 9),
-                ("REGION/LINKDATA_REGION_EDEN_AS.BIN", "REGION_EDEN_AS", 10),
-                ("REGION/LINKDATA_REGION_EDEN_EU.BIN", "REGION_EDEN_EU", 11),
-                ("REGION/LINKDATA_REGION_EDEN_JP.BIN", "REGION_EDEN_JP", 12),
-                ("REGION/LINKDATA_REGION_EU.BIN", "REGION_EU", 13),
-                ("EX/LINKDATA_EX_MASTER.BIN", "LINK_EX", 14),
-                ("PATCH/LINKDATA_PATCH_000.BIN", "LINK_PATCH", 15),
-                ("PATCH/LINKDATA_PATCH_EDEN_000.BIN", "LINK_PATCH_EDEN", 16),
-            ]
 
-            for bin_path, folder_name, container_id in unpack_jobs:
+        try:
+            found = resolve_containers(profile)
+            if not found:
+                self.set_status(f"No {profile.short_label} containers found.", "red")
+                self.ui_notify(
+                    "warning",
+                    "Nothing to unpack",
+                    f"No {profile.label} LINKDATA containers were found next to the toolkit.\n\n"
+                    f"Expected files like: {profile.candidates(0)[0]}",
+                )
+                return
+
+            unpacked = 0
+            for container_id in sorted(found):
+                bin_path = found[container_id]
+                folder_name = profile.unpack_dir(container_id)
+                os.makedirs(folder_name, exist_ok=True)
                 self.set_status(f"Processing {os.path.basename(bin_path)}", "blue")
                 unpacker.unpack_resource(bin_path, folder_name, container_id)
-            
-            self.set_status("Unpacking Complete.", "green")
+                unpacked += 1
+
+            manifest_path = unpacker.save_manifest()
+            self.set_status(f"Unpacking complete, {unpacked} containers.", "green")
+            if manifest_path is None:
+                return
+            self.ui_notify(
+                "info",
+                "Unpack Complete",
+                f"Unpacked {unpacked} {profile.short_label} containers.\n\n"
+                f"Taildata was written to:\n{manifest_path}\n\n"
+                "Keep this manifest next to the unpacked folders and "
+                "the Mod Creator will find it on its own."
+            )
         except Exception as e:
             err = str(e)
+            log.exception("Unpacking failed")
             self.root.after(0, lambda err=err: messagebox.showerror("Error", f"Unpacking failed: {err}"))
         finally:
             self.root.after(0, lambda: setattr(self, "active_task", None))
@@ -1832,6 +1976,10 @@ class HoverCard(tk.Canvas):
     def on_click(self, event=None):
         self.command()
         return "break"
+
+    def set_subtitle(self, subtitle: str):
+        if self.winfo_exists():
+            self.itemconfig(self.sub_text, text=subtitle)
 
     def set_selected(self, selected: bool):
         if not self.winfo_exists():

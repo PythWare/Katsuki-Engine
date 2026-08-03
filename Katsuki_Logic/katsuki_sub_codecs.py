@@ -3,7 +3,7 @@ katsuki_sub_codecs.py
 
 Central compression/decompression hub for KT container resources
 
-Supported kinds (case-insensitive):
+Supported kinds:
 
 zlib: Plain zlib stream (no extra header)
 zlib_header: Omega-style zlib: 4 byte compressed_size + zlib stream
