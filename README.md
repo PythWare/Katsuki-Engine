@@ -32,7 +32,9 @@ KE will unpack the BIN containers, unpack subcontainers, decompress, etc. Unpack
 
 When unpacking don't assume KE is frozen/stuck if the unpack bar doesn't progress, it isn't. It just takes several minutes to fully unpack/decompress because it's a lot of data being read and a lot of files being unpacked. The speed of unpacking may be affected by if you're unpacking in a HDD or SSD.
 
-<img width="1050" height="972" alt="nk6" src="https://github.com/user-attachments/assets/7762e9c3-a746-45f4-aa87-160a003129bb" />
+<img width="802" height="927" alt="nke1" src="https://github.com/user-attachments/assets/e35c04ff-b68a-4f20-ba05-62d10f508476" />
+
+<img width="802" height="929" alt="nke2" src="https://github.com/user-attachments/assets/09156e3f-b4a0-490c-8461-03959d0bf059" />
 
 # Mod Creator
 
