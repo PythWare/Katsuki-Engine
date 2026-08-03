@@ -21,4 +21,6 @@ do have proper filenames and are placed in the original paths they would be in.
 IMPORTANT, if you see empty files created in a directory (like in AoT2\LINKDATA\LINK_B\File\Stage\ST00_00\high_mdl) don't delete those empty files, it's used for indexing when rebuilding subcontainers.
 Empty files may be generated during subcontainer unpacking sometimes and the reason is Omega Force either had dummy entries or unimplemented features they didn't get around to I guess.
 
+When creating a mod with Mod Creator, make sure the modded files are placed in the original directory structure when selecting the files to create the mod package/installer (i.e., if you mod say effect_trs.bin at AOT1\LINK_A\FILE\ACTION then make sure the modded effect_trs.bin is located in a directory that matches that layout like Modded\AOT1\LINK_A\FILE\ACTION)
+
 If you encounter any issues, before you create an issue or contact me on discord/reddit, make sure you read the readme and this text file.
