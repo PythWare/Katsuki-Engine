@@ -1,3 +1,7 @@
+# Version 1.1 update
+
+Version 1.1 will release soon, with it will include Attack On Titan 1 support. KE can currently unpack both games with the original paths (directories/filenames) intact when feasible. That means both games will unpack with the original filenames and reconstructed paths.
+
 # Version 1.0
 
 Katsuki Engine 1.0 has released. It has a new GUI, a different theme for the Mod Manager, and new subcontainer logic. My work on Aldnoah Engine has taught me a lot about Omega Force's signatureless subcontainers, so the new KE will has major improvements for subcontainer handling so it matches my Aldnoah Engine.
