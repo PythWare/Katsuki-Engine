@@ -4,6 +4,8 @@ Version 1.1 has released, Attack On Titan 1 is now supported. KE now unpacks bot
 
 A new change for Katsuki Engine is the taildata approach, files no longer unpack with taildata (similar to my Conception Engine). Instead, taildata is added to a json generated during unpacking. Don't you fucking delete the json generated, it's used for the Mod Manager for mod applying/disabling.
 
+Make sure to read the entire readme along with KE_Guide.txt if you intend to mod the AOT games. Also, do a new unpack for the game you intend to mod since the file unpacking has changed. If all you want to do is apply mods you downloaded from nexus, you don't need to unpack the games. Unpacking the games is only for people that want to mod the game.
+
 <img width="796" height="920" alt="aot1" src="https://github.com/user-attachments/assets/a6091c25-ffdd-4e75-a6c9-2ea8f861182c" />
 
 <img width="800" height="944" alt="aot2" src="https://github.com/user-attachments/assets/334f63e6-879c-4b05-ae3e-8404fee9053f" />
