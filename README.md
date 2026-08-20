@@ -1,3 +1,7 @@
+# Update
+
+Katsuki Engine is still being worked on, the Mod Manager is being redesigned
+
 # Version 1.1
 
 Version 1.1 has released, Attack On Titan 1 is now supported. KE now unpacks both Attack on Titan games. The unpacked files retain the original paths as well when feasible. That means both games will unpack with the original filenames and reconstructed paths.
